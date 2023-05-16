@@ -1,0 +1,163 @@
+body {
+  /* background-color: #c2e1b9; */
+  background-color: #00c1b2;
+  font-family: 'Lilita One', cursive;
+}
+
+a {
+  color: inherit;
+}
+
+a:hover {
+  color: inherit;
+}
+
+.container-fluid {
+  padding: 1% 5%;
+}
+
+.line {
+  position: relative;
+  width: 80%;
+  left: 10%;
+}
+
+/* Navbar */
+.navbar-brand {
+  font-size: 5rem;
+  text-transform: capitalize;
+}
+
+.colon {
+  padding: 5px 5px;
+}
+
+/**/
+.day {
+  color: #000000;
+  font-size: 1.5rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  height: 600px;
+  position: absolute;
+}
+
+.day-title {
+  margin-top: 5px;
+  font-size: 2rem;
+}
+
+.meal {
+  color: #000000;
+  font-size: 2rem;
+  height: 260px;
+  margin: 5px 15px;
+}
+
+.meal-title {
+  height: 80%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mon {
+  background-color: #ffc2b4;
+  position: relative;
+}
+
+.mon-line {
+  border-bottom: 5px solid #dfa092;
+}
+
+.tues {
+  background-color: #b6e3f9;
+  position: relative;
+}
+
+.tues-line {
+  border-bottom: 5px solid #88b8cf;
+}
+
+.wed {
+  background-color: #d1f3c8;
+  position: relative;
+}
+
+.wed-line {
+  border-bottom: 5px solid #afd4a5;
+}
+
+.thurs {
+  background-color: #ffa4cb;
+  position: relative;
+}
+
+.thurs-line {
+  border-bottom: 5px solid #d1739b;
+}
+
+.fri {
+  background-color: #c9dcff;
+  position: relative;
+}
+
+.fri-line {
+  border-bottom: 5px solid #94a6c6;
+}
+
+.sat {
+  background-color: #f9c374;
+  position: relative;
+}
+
+.sat-line {
+  border-bottom: 5px solid #d8a760;
+}
+
+.sun {
+  background-color: #518eba;
+  position: relative;
+}
+
+.sun-line {
+  border-bottom: 5px solid #3f6e91;
+}
+
+.note {
+  color: #000000;
+  background-color: #ffffff;
+  position: relative;
+}
+
+.options-top {
+  position: absolute;
+  top: 45%;
+}
+
+.options-bottom {
+  position: absolute;
+  top: 92%;
+}
+
+.option-refresh {
+  left: 10%;
+}
+
+.option-tag {
+  left: 30%;
+}
+
+.option-list {
+  right: 10%;
+}
+
+@media (max-width: 576px ) {
+
+  /* Navbar */
+  .navbar-brand {
+    font-size: 2rem;
+    text-transform: capitalize;
+  }
+
+}

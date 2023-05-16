@@ -1,1 +1,2 @@
-# easymeal
+# README
+nothing for the moment
