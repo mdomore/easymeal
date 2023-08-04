@@ -1,6 +1,6 @@
 // Array to store Meals
 var meals = [
-  "Viande - légumes plancha",
+	"Viande - légumes plancha",
 	"Tomates farcies",
 	"Tomates - mozza",
 	"Tartiflette",
@@ -51,10 +51,12 @@ var meals = [
 	"Chili con carne",
 	"Buritos",
 	"Boulettes viande - semoule",
-  "Tempura de légumes",
-  "Poulet Teriyaki - riz, concombres",
-  "Poisson - Haricots verts",
-  "Poulet aux pruneaux - riz sarfané - oignons",
+	"Tempura de légumes",
+	"Poulet Teriyaki - riz, concombres",
+	"Poisson - Haricots verts",
+	"Poulet aux pruneaux - riz sarfané - oignons",
+	"Curry de chou-fleur rôti et lentilles corail", // https://chefsimon.com/gourmets/radisrose/recettes/curry-de-chou-fleur-roti-et-lentilles-corail
+	"Gaufres salées à la Patate douce", // https://cuisine-addict.com/gaufres-salees-a-la-patate-douce/
 ];
 
 // Array to store tags
@@ -76,13 +78,13 @@ var tags = [
 
 // Array to store week days
 var days = [
-  "mon",
-  "tues",
-  "wed",
-  "thurs",
-  "fri",
-  "sat",
-  "sun",
+	"mon",
+	"tues",
+	"wed",
+	"thurs",
+	"fri",
+	"sat",
+	"sun",
 ]
 
 //

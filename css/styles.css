@@ -1,6 +1,7 @@
 body {
   /* background-color: #c2e1b9; */
-  background-color: #00c1b2;
+  /* background-color: #00c1b2; */
+  background-color: #eeeeee;
   font-family: 'Lilita One', cursive;
 }
 
@@ -40,6 +41,8 @@ a:hover {
   text-transform: uppercase;
   height: 600px;
   position: absolute;
+  border-radius: 1rem;
+  background-color: #ffffff;
 }
 
 .day-title {
@@ -62,66 +65,115 @@ a:hover {
 }
 
 .mon {
-  background-color: #ffc2b4;
+  border: 0.1rem solid #75B9BE;
   position: relative;
+  border-top-width: 0;
 }
 
 .mon-line {
-  border-bottom: 5px solid #dfa092;
+  border-bottom: 0.1rem solid #75B9BE;
+}
+
+.mon-title {
+  background-color: #75B9BE;
+  display: block;
+  border-radius: 0.9rem 0.9rem 0 0;
 }
 
 .tues {
-  background-color: #b6e3f9;
+  border: 0.1rem solid #A8CCC9;
   position: relative;
+  border-top-width: 0;
 }
 
 .tues-line {
-  border-bottom: 5px solid #88b8cf;
+  border-bottom: 0.1rem solid #A8CCC9;
+}
+
+.tues-title {
+  background-color: #A8CCC9;
+  display: block;
+  border-radius: 0.9rem 0.9rem 0 0;
 }
 
 .wed {
-  background-color: #d1f3c8;
+  border: 0.1rem solid #B3D6C6;
   position: relative;
+  border-top-width: 0;
 }
 
 .wed-line {
-  border-bottom: 5px solid #afd4a5;
+  border-bottom: 0.1rem solid #B3D6C6;
+}
+
+.wed-title {
+  background-color: #B3D6C6;
+  display: block;
+  border-radius: 0.9rem 0.9rem 0 0;
 }
 
 .thurs {
-  background-color: #ffa4cb;
+  border: 0.1rem solid #DCEAB2;
   position: relative;
+  border-top-width: 0;
 }
 
 .thurs-line {
-  border-bottom: 5px solid #d1739b;
+  border-bottom: 0.1rem solid #DCEAB2;
+}
+
+.thurs-title {
+  background-color: #DCEAB2;
+  display: block;
+  border-radius: 0.9rem 0.9rem 0 0;
 }
 
 .fri {
-  background-color: #c9dcff;
+  border: 0.1rem solid #75B9BE;
   position: relative;
+  border-top-width: 0;
 }
 
 .fri-line {
-  border-bottom: 5px solid #94a6c6;
+  border-bottom: 0.1rem solid #75B9BE;
+}
+
+.fri-title {
+  background-color: #75B9BE;
+  display: block;
+  border-radius: 0.9rem 0.9rem 0 0;
 }
 
 .sat {
-  background-color: #f9c374;
+  border: 0.1rem solid #A8CCC9;
   position: relative;
+  border-top-width: 0;
 }
 
 .sat-line {
-  border-bottom: 5px solid #d8a760;
+  border-bottom: 0.1rem solid #A8CCC9;
+}
+
+.sat-title {
+  background-color: #A8CCC9;
+  display: block;
+  border-radius: 0.9rem 0.9rem 0 0;
 }
 
 .sun {
-  background-color: #518eba;
+  border: 0.1rem solid #B3D6C6;
   position: relative;
+  border-top-width: 0;
 }
 
 .sun-line {
-  border-bottom: 5px solid #3f6e91;
+  border-bottom: 0.1rem solid #B3D6C6;
+}
+
+.sun-title {
+  background-color: #B3D6C6;
+  display: block;
+  border-radius: 0.9rem 0.9rem 0 0;
 }
 
 .note {
