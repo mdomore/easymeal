@@ -113,17 +113,17 @@ a:hover {
 }
 
 .thurs {
-  border: 0.1rem solid #aacc00;
+  border: 0.1rem solid #D4D700;
   position: relative;
   border-top-width: 0;
 }
 
 .thurs-line {
-  border-bottom: 0.1rem solid #aacc00;
+  border-bottom: 0.1rem solid #D4D700;
 }
 
 .thurs-title {
-  background-color: #aacc00;
+  background-color: #D4D700;
   display: block;
   border-radius: 0.9rem 0.9rem 0 0;
 }
@@ -177,9 +177,15 @@ a:hover {
 }
 
 .note {
-  color: #000000;
-  background-color: #ffffff;
+  border: 0.1rem solid #D4D700;
   position: relative;
+  border-top-width: 0;
+}
+
+.note-title {
+  background-color: #D4D700;
+  display: block;
+  border-radius: 0.9rem 0.9rem 0 0;
 }
 
 .options-top {
@@ -198,6 +204,10 @@ a:hover {
 
 .option-tag {
   left: 30%;
+}
+
+.option-link {
+  left: 62.5%;
 }
 
 .option-list {
