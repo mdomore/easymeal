@@ -2,7 +2,7 @@ body {
   /* background-color: #c2e1b9; */
   /* background-color: #00c1b2; */
   background-color: #eeeeee;
-  font-family: 'Lilita One', cursive;
+  font-family: 'Libre Baskerville', cursive;
 }
 
 a {
@@ -14,7 +14,7 @@ a:hover {
 }
 
 .container-fluid {
-  padding: 1% 5%;
+  padding: 0 5%;
 }
 
 .line {
@@ -24,9 +24,15 @@ a:hover {
 }
 
 /* Navbar */
+
+.navbar {
+  padding: 0;
+}
+
 .navbar-brand {
-  font-size: 5rem;
-  text-transform: capitalize;
+  font-weight: bold;
+  font-size: 2rem;
+  text-transform: uppercase;
 }
 
 .colon {
@@ -36,8 +42,7 @@ a:hover {
 /**/
 .day {
   color: #000000;
-  font-size: 1.5rem;
-  font-weight: bold;
+  font-size: 2rem;
   text-transform: uppercase;
   height: 600px;
   position: absolute;
@@ -52,12 +57,13 @@ a:hover {
 
 .meal {
   color: #000000;
-  font-size: 2rem;
+  font-size: 1.5rem;
   height: 260px;
   margin: 5px 15px;
 }
 
 .meal-title {
+  font-family: 'Libre Baskerville', Arial, Helvetica, sans-serif;
   height: 80%;
   display: flex;
   align-items: center;

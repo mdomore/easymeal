@@ -222,7 +222,7 @@ var meals = [
 	},
 	{
 		"name": "Curry de chou-fleur rôti et lentilles corail",
-		"link": "https://chefsimon.com/gourmets/radisrose/recettes/curry-de-chou-fleur-roti-et-lentilles-corail"
+		"link": "https://radisrose.fr/curry-chou-fleur-roti-lentilles-corail/"
 	},
 	{
 		"name": "Gaufres salées à la Patate douce",
@@ -264,10 +264,18 @@ var days = [
 for (day of days) {
   var randomNumber = Math.floor(Math.random() * meals.length);
   $("." + day +" .meal.lunch .meal-title").text(meals[randomNumber].name);
-	$("." + day +" .meal.lunch .href-link").attr("href", meals[randomNumber].link);
+	if ( meals[randomNumber].link != ""){
+		$("." + day +" .meal.lunch .href-link").attr({"href": meals[randomNumber].link,
+																									"target": "_blank",
+																									"rel": "noopener noreferrer"});
+	}
   var randomNumber = Math.floor(Math.random() * meals.length);
   $("." + day +" .meal.diner .meal-title").text(meals[randomNumber].name);
-	$("." + day +" .meal.diner .href-link").attr("href", meals[randomNumber].link);
+	if ( meals[randomNumber].link != ""){
+		$("." + day +" .meal.diner .href-link").attr({"href": meals[randomNumber].link,
+																									"target": "_blank",
+																									"rel": "noopener noreferrer"});
+	}
 }
 
 // Refresh button implementation
@@ -276,7 +284,11 @@ $(".option-refresh").click(function(e) {
   e.preventDefault();
   var randomNumber = Math.floor(Math.random() * meals.length);
   $(this).closest(".meal").children(".meal-title").text(meals[randomNumber].name);
-	$(this).closest(".meal").children(".href-link").attr("href", meals[randomNumber].link);
+	if ( meals[randomNumber].link != ""){
+		$(this).closest(".meal").children(".href-link").attr({"href": meals[randomNumber].link,
+																													"target": "_blank",
+																													"rel": "noopener noreferrer"});
+	}
   return false;
 })
 
@@ -291,3 +303,10 @@ $(".option-xmark").click(function(e) {
     $(this).closest(".meal").children(".meal-title").fadeOut();
   }
 })
+
+
+function setAttributes(element, attributes) {
+  Object.keys(attributes).forEach(attr => {
+    element.setAttribute(attr, attributes[attr]);
+  });
+}
