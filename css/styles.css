@@ -1,3 +1,4 @@
+/* Color palette : https://coolors.co/palette/007f5f-2b9348-55a630-80b918-aacc00-bfd200-d4d700-dddf00-eeef20-ffff3f */
 body {
   /* background-color: #c2e1b9; */
   /* background-color: #00c1b2; */
@@ -65,113 +66,113 @@ a:hover {
 }
 
 .mon {
-  border: 0.1rem solid #75B9BE;
+  border: 0.1rem solid #007f5f;
   position: relative;
   border-top-width: 0;
 }
 
 .mon-line {
-  border-bottom: 0.1rem solid #75B9BE;
+  border-bottom: 0.1rem solid #007f5f;
 }
 
 .mon-title {
-  background-color: #75B9BE;
+  background-color: #007f5f;
   display: block;
   border-radius: 0.9rem 0.9rem 0 0;
 }
 
 .tues {
-  border: 0.1rem solid #A8CCC9;
+  border: 0.1rem solid #55a630;
   position: relative;
   border-top-width: 0;
 }
 
 .tues-line {
-  border-bottom: 0.1rem solid #A8CCC9;
+  border-bottom: 0.1rem solid #55a630;
 }
 
 .tues-title {
-  background-color: #A8CCC9;
+  background-color: #55a630;
   display: block;
   border-radius: 0.9rem 0.9rem 0 0;
 }
 
 .wed {
-  border: 0.1rem solid #B3D6C6;
+  border: 0.1rem solid #aacc00;
   position: relative;
   border-top-width: 0;
 }
 
 .wed-line {
-  border-bottom: 0.1rem solid #B3D6C6;
+  border-bottom: 0.1rem solid #aacc00;
 }
 
 .wed-title {
-  background-color: #B3D6C6;
+  background-color: #aacc00;
   display: block;
   border-radius: 0.9rem 0.9rem 0 0;
 }
 
 .thurs {
-  border: 0.1rem solid #DCEAB2;
+  border: 0.1rem solid #aacc00;
   position: relative;
   border-top-width: 0;
 }
 
 .thurs-line {
-  border-bottom: 0.1rem solid #DCEAB2;
+  border-bottom: 0.1rem solid #aacc00;
 }
 
 .thurs-title {
-  background-color: #DCEAB2;
+  background-color: #aacc00;
   display: block;
   border-radius: 0.9rem 0.9rem 0 0;
 }
 
 .fri {
-  border: 0.1rem solid #75B9BE;
+  border: 0.1rem solid #007f5f;
   position: relative;
   border-top-width: 0;
 }
 
 .fri-line {
-  border-bottom: 0.1rem solid #75B9BE;
+  border-bottom: 0.1rem solid #007f5f;
 }
 
 .fri-title {
-  background-color: #75B9BE;
+  background-color: #007f5f;
   display: block;
   border-radius: 0.9rem 0.9rem 0 0;
 }
 
 .sat {
-  border: 0.1rem solid #A8CCC9;
+  border: 0.1rem solid #55a630;
   position: relative;
   border-top-width: 0;
 }
 
 .sat-line {
-  border-bottom: 0.1rem solid #A8CCC9;
+  border-bottom: 0.1rem solid #55a630;
 }
 
 .sat-title {
-  background-color: #A8CCC9;
+  background-color: #55a630;
   display: block;
   border-radius: 0.9rem 0.9rem 0 0;
 }
 
 .sun {
-  border: 0.1rem solid #B3D6C6;
+  border: 0.1rem solid #aacc00;
   position: relative;
   border-top-width: 0;
 }
 
 .sun-line {
-  border-bottom: 0.1rem solid #B3D6C6;
+  border-bottom: 0.1rem solid #aacc00;
 }
 
 .sun-title {
-  background-color: #B3D6C6;
+  background-color: #aacc00;
   display: block;
   border-radius: 0.9rem 0.9rem 0 0;
 }
