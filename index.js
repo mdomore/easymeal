@@ -285,9 +285,13 @@ $(".option-refresh").click(function(e) {
   var randomNumber = Math.floor(Math.random() * meals.length);
   $(this).closest(".meal").children(".meal-title").text(meals[randomNumber].name);
 	if ( meals[randomNumber].link != ""){
-		$(this).closest(".meal").children(".href-link").attr({"href": meals[randomNumber].link,
+		$(this).closest(".meal").children().children(".href-link").attr({"href": meals[randomNumber].link,
 																													"target": "_blank",
 																													"rel": "noopener noreferrer"});
+	} else {
+		$(this).closest(".meal").children().children(".href-link").attr("href", "#");
+		$(this).closest(".meal").children().children(".href-link").removeAttr("target");
+		$(this).closest(".meal").children().children(".href-link").removeAttr("rel");
 	}
   return false;
 })
