@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
@@ -10,6 +10,9 @@ import sqlite3
 import os
 from jose import JWTError, jwt
 import bcrypt
+import shutil
+import uuid
+from pathlib import Path
 
 app = FastAPI(title="EasyMeal Recipe App", version="1.0.0")
 
@@ -31,6 +34,18 @@ security = HTTPBearer()
 
 # Database path
 DB_PATH = os.getenv("DB_PATH", "meals.db")
+# Photos directory - store in data directory for persistence
+PHOTOS_DIR_ENV = os.getenv("PHOTOS_DIR")
+if PHOTOS_DIR_ENV:
+    PHOTOS_DIR = Path(PHOTOS_DIR_ENV)
+else:
+    # Default to data/photos if DB_PATH is in data directory, otherwise static/photos
+    db_path_obj = Path(DB_PATH)
+    if db_path_obj.parent.name == "data" or str(db_path_obj).startswith("/app/data"):
+        PHOTOS_DIR = Path("data/photos")
+    else:
+        PHOTOS_DIR = Path("static/photos")
+PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # Pydantic models
@@ -64,6 +79,7 @@ class Meal(BaseModel):
     name: str
     description: Optional[str] = None
     url: Optional[str] = None
+    photo_filename: Optional[str] = None
     created_at: Optional[str] = None
     user_id: Optional[int] = None
 
@@ -111,17 +127,20 @@ def init_db():
             name TEXT NOT NULL,
             description TEXT,
             url TEXT,
+            photo_filename TEXT,
             created_at TEXT NOT NULL,
             user_id INTEGER NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
     
-    # Add url column if it doesn't exist (for existing databases)
+    # Add columns if they don't exist (for existing databases)
     cursor.execute("PRAGMA table_info(meals)")
     columns = [column[1] for column in cursor.fetchall()]
     if 'url' not in columns:
         cursor.execute("ALTER TABLE meals ADD COLUMN url TEXT")
+    if 'photo_filename' not in columns:
+        cursor.execute("ALTER TABLE meals ADD COLUMN photo_filename TEXT")
     
     conn.commit()
     conn.close()
@@ -349,14 +368,31 @@ async def get_meal(meal_id: int, current_user: dict = Depends(get_current_user))
 
 
 @app.post("/api/meals", response_model=Meal, status_code=201)
-async def create_meal(meal: MealCreate, current_user: dict = Depends(get_current_user)):
+async def create_meal(
+    name: str = Form(...),
+    description: Optional[str] = Form(None),
+    url: Optional[str] = Form(None),
+    photo: Optional[UploadFile] = File(None),
+    current_user: dict = Depends(get_current_user)
+):
     """Create a new meal"""
+    photo_filename = None
+    if photo:
+        # Generate unique filename
+        file_ext = Path(photo.filename).suffix if photo.filename else '.jpg'
+        photo_filename = f"{uuid.uuid4()}{file_ext}"
+        photo_path = PHOTOS_DIR / photo_filename
+        
+        # Save photo
+        with open(photo_path, "wb") as buffer:
+            shutil.copyfileobj(photo.file, buffer)
+    
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     created_at = datetime.now().isoformat()
     cursor.execute(
-        "INSERT INTO meals (name, description, url, created_at, user_id) VALUES (?, ?, ?, ?, ?)",
-        (meal.name, meal.description, meal.url, created_at, current_user["id"])
+        "INSERT INTO meals (name, description, url, photo_filename, created_at, user_id) VALUES (?, ?, ?, ?, ?, ?)",
+        (name, description, url, photo_filename, created_at, current_user["id"])
     )
     meal_id = cursor.lastrowid
     conn.commit()
@@ -364,9 +400,10 @@ async def create_meal(meal: MealCreate, current_user: dict = Depends(get_current
     
     return {
         "id": meal_id,
-        "name": meal.name,
-        "description": meal.description,
-        "url": meal.url,
+        "name": name,
+        "description": description,
+        "url": url,
+        "photo_filename": photo_filename,
         "created_at": created_at,
         "user_id": current_user["id"]
     }
@@ -375,7 +412,11 @@ async def create_meal(meal: MealCreate, current_user: dict = Depends(get_current
 @app.put("/api/meals/{meal_id}", response_model=Meal)
 async def update_meal(
     meal_id: int,
-    meal: MealUpdate,
+    name: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    url: Optional[str] = Form(None),
+    photo: Optional[UploadFile] = File(None),
+    remove_photo: Optional[str] = Form(None),
     current_user: dict = Depends(get_current_user)
 ):
     """Update a meal"""
@@ -394,18 +435,45 @@ async def update_meal(
         conn.close()
         raise HTTPException(status_code=404, detail="Meal not found")
     
+    old_photo_filename = row["photo_filename"]
+    photo_filename = old_photo_filename
+    
+    # Handle photo upload/removal
+    if remove_photo == "true" and old_photo_filename:
+        # Delete old photo
+        old_photo_path = PHOTOS_DIR / old_photo_filename
+        if old_photo_path.exists():
+            old_photo_path.unlink()
+        photo_filename = None
+    elif photo:
+        # Delete old photo if exists
+        if old_photo_filename:
+            old_photo_path = PHOTOS_DIR / old_photo_filename
+            if old_photo_path.exists():
+                old_photo_path.unlink()
+        
+        # Save new photo
+        file_ext = Path(photo.filename).suffix if photo.filename else '.jpg'
+        photo_filename = f"{uuid.uuid4()}{file_ext}"
+        photo_path = PHOTOS_DIR / photo_filename
+        with open(photo_path, "wb") as buffer:
+            shutil.copyfileobj(photo.file, buffer)
+    
     # Update fields
     update_fields = []
     values = []
-    if meal.name is not None:
+    if name is not None:
         update_fields.append("name = ?")
-        values.append(meal.name)
-    if meal.description is not None:
+        values.append(name)
+    if description is not None:
         update_fields.append("description = ?")
-        values.append(meal.description)
-    if meal.url is not None:
+        values.append(description)
+    if url is not None:
         update_fields.append("url = ?")
-        values.append(meal.url)
+        values.append(url)
+    if photo_filename != old_photo_filename:
+        update_fields.append("photo_filename = ?")
+        values.append(photo_filename)
     
     if not update_fields:
         conn.close()
@@ -433,16 +501,54 @@ async def update_meal(
 async def delete_meal(meal_id: int, current_user: dict = Depends(get_current_user)):
     """Delete a meal by ID"""
     conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
+    
+    # Get meal to check if it exists and get photo filename
+    cursor.execute(
+        "SELECT * FROM meals WHERE id = ? AND user_id = ?",
+        (meal_id, current_user["id"])
+    )
+    row = cursor.fetchone()
+    
+    if row is None:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Meal not found")
+    
+    # Delete photo if exists
+    if row["photo_filename"]:
+        photo_path = PHOTOS_DIR / row["photo_filename"]
+        if photo_path.exists():
+            photo_path.unlink()
+    
+    # Delete meal
     cursor.execute(
         "DELETE FROM meals WHERE id = ? AND user_id = ?",
         (meal_id, current_user["id"])
     )
     conn.commit()
-    deleted = cursor.rowcount
     conn.close()
     
-    if deleted == 0:
-        raise HTTPException(status_code=404, detail="Meal not found")
-    
     return None
+
+@app.get("/api/meals/{meal_id}/photo")
+async def get_meal_photo(meal_id: int, current_user: dict = Depends(get_current_user)):
+    """Get meal photo"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT photo_filename FROM meals WHERE id = ? AND user_id = ?",
+        (meal_id, current_user["id"])
+    )
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row or not row["photo_filename"]:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    
+    photo_path = PHOTOS_DIR / row["photo_filename"]
+    if not photo_path.exists():
+        raise HTTPException(status_code=404, detail="Photo file not found")
+    
+    return FileResponse(photo_path)

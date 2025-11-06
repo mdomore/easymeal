@@ -12,7 +12,7 @@
         <!-- Login/Register View -->
         <div id="auth-view" class="view">
             <div class="auth-container">
-                <h1>🍽️ EasyMeal</h1>
+                <h1>EasyMeal</h1>
                 <div class="auth-tabs">
                     <button class="tab-btn active" onclick="showLogin()">Login</button>
                     <button class="tab-btn" onclick="showRegister()">Register</button>
@@ -40,17 +40,20 @@
         <!-- Meals View -->
         <div id="meals-view" class="view hidden">
             <header>
-                <h1>🍽️ EasyMeal</h1>
+                <h1>EasyMeal</h1>
                 <div class="user-info">
-                    <span id="username-display"></span>
+                    <button id="dark-mode-toggle" class="btn-icon" onclick="toggleDarkMode()" title="Toggle dark mode">🌙</button>
                     <button onclick="logout()" class="btn-secondary">Logout</button>
                 </div>
             </header>
             
             <main>
                 <div class="meals-header">
-                    <h2>My Meals</h2>
-                    <button onclick="showAddMealForm()" class="btn-primary">+ Add Meal</button>
+                    <input type="text" id="search-box" placeholder="Search meals..." oninput="filterMeals()">
+                    <div class="header-buttons">
+                        <button onclick="toggleOrdering()" class="btn-primary" id="order-btn">A-Z</button>
+                        <button onclick="showAddMealForm()" class="btn-primary">+ Add Meal</button>
+                    </div>
                 </div>
                 
                 <div id="meals-list" class="meals-list"></div>
@@ -68,6 +71,10 @@
                             <div class="detail-section">
                                 <h4>Recipe Link</h4>
                                 <div id="detail-url"></div>
+                            </div>
+                            <div class="detail-section">
+                                <h4>Photo</h4>
+                                <div id="detail-photo"></div>
                             </div>
                             <div class="detail-section">
                                 <h4>Created</h4>
@@ -97,10 +104,18 @@
                     <div class="modal-content">
                         <span class="close" onclick="closeMealModal()">&times;</span>
                         <h3 id="modal-title">Add Meal</h3>
-                        <form id="meal-form" onsubmit="saveMeal(event)">
+                        <form id="meal-form" onsubmit="saveMeal(event)" enctype="multipart/form-data">
                             <input type="text" id="meal-name" placeholder="Meal name" required>
                             <textarea id="meal-description" placeholder="Description (optional)"></textarea>
                             <input type="url" id="meal-url" placeholder="Recipe URL (optional)" autocomplete="url">
+                            <div class="photo-upload">
+                                <label for="meal-photo" class="photo-label">
+                                    <span id="photo-label-text">📷 Add Photo (optional)</span>
+                                    <input type="file" id="meal-photo" accept="image/*" onchange="handlePhotoSelect(event)" style="display: none;">
+                                </label>
+                                <div id="photo-preview" class="photo-preview hidden"></div>
+                                <button type="button" id="remove-photo-btn" class="btn-remove-photo hidden" onclick="removePhoto()">Remove Photo</button>
+                            </div>
                             <div class="modal-actions">
                                 <button type="button" onclick="closeMealModal()" class="btn-secondary">Cancel</button>
                                 <button type="submit" class="btn-primary">Save</button>

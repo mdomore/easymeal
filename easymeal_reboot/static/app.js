@@ -11,6 +11,10 @@ const API_BASE = `${getBasePath()}/api`;
 let currentToken = null;
 let currentUser = null;
 let editingMealId = null;
+let allMeals = [];
+let sortOrder = 'asc'; // 'asc' = A-Z, 'desc' = Z-A
+let selectedPhoto = null;
+let currentPhotoUrl = null;
 
 // Check if user is already logged in
 window.addEventListener('DOMContentLoaded', () => {
@@ -19,6 +23,8 @@ window.addEventListener('DOMContentLoaded', () => {
         currentToken = token;
         checkAuth();
     }
+    // Load dark mode preference
+    loadDarkMode();
 });
 
 // Auth functions
@@ -204,7 +210,6 @@ function logout() {
 function showMealsView() {
     document.getElementById('auth-view').classList.add('hidden');
     document.getElementById('meals-view').classList.remove('hidden');
-    document.getElementById('username-display').textContent = currentUser.username;
     loadMeals();
 }
 
@@ -219,11 +224,29 @@ async function loadMeals() {
         
         if (response.ok) {
             const meals = await response.json();
-            displayMeals(meals);
+            allMeals = meals;
+            applySortAndDisplay();
         }
     } catch (error) {
         console.error('Failed to load meals:', error);
     }
+}
+
+async function loadMealPhoto(mealId) {
+    try {
+        const response = await fetch(`${API_BASE}/meals/${mealId}/photo`, {
+            headers: {
+                'Authorization': `Bearer ${currentToken}`
+            }
+        });
+        if (response.ok) {
+            const blob = await response.blob();
+            return URL.createObjectURL(blob);
+        }
+    } catch (error) {
+        console.error('Failed to load photo:', error);
+    }
+    return null;
 }
 
 function displayMeals(meals) {
@@ -236,13 +259,12 @@ function displayMeals(meals) {
     
     mealsList.innerHTML = meals.map(meal => {
         return `
-        <div class="meal-card">
+        <div class="meal-card" onclick="showMealDetails(${meal.id})" style="cursor: pointer;">
             <div class="meal-card-header">
                 <h3>${escapeHtml(meal.name)}</h3>
-                <div class="meal-menu">
+                <div class="meal-menu" onclick="event.stopPropagation();">
                     <button class="meal-menu-btn" onclick="toggleMealMenu(${meal.id})">⋯</button>
                     <div id="menu-${meal.id}" class="meal-menu-dropdown hidden">
-                        <button onclick="showMealDetails(${meal.id})">Details</button>
                         <button onclick="editMeal(${meal.id})">Edit</button>
                         <button onclick="deleteMeal(${meal.id})" class="delete-option">Delete</button>
                     </div>
@@ -255,10 +277,17 @@ function displayMeals(meals) {
 
 function showAddMealForm() {
     editingMealId = null;
+    selectedPhoto = null;
+    currentPhotoUrl = null;
     document.getElementById('modal-title').textContent = 'Add Meal';
     document.getElementById('meal-name').value = '';
     document.getElementById('meal-description').value = '';
     document.getElementById('meal-url').value = '';
+    document.getElementById('meal-photo').value = '';
+    document.getElementById('photo-preview').classList.add('hidden');
+    document.getElementById('photo-preview').innerHTML = '';
+    document.getElementById('remove-photo-btn').classList.add('hidden');
+    document.getElementById('photo-label-text').textContent = '📷 Add Photo (optional)';
     document.getElementById('meal-modal').classList.remove('hidden');
 }
 
@@ -270,6 +299,7 @@ function editMeal(mealId) {
     });
     
     editingMealId = mealId;
+    selectedPhoto = null;
     document.getElementById('modal-title').textContent = 'Edit Meal';
     
     fetch(`${API_BASE}/meals/${mealId}`, {
@@ -278,10 +308,34 @@ function editMeal(mealId) {
         }
     })
     .then(response => response.json())
-    .then(meal => {
+    .then(async (meal) => {
         document.getElementById('meal-name').value = meal.name;
         document.getElementById('meal-description').value = meal.description || '';
         document.getElementById('meal-url').value = meal.url || '';
+        document.getElementById('meal-photo').value = '';
+        
+        if (meal.photo_filename) {
+            // Load existing photo with authentication
+            const photoUrl = await loadMealPhoto(mealId);
+            if (photoUrl) {
+                currentPhotoUrl = photoUrl;
+                document.getElementById('photo-preview').innerHTML = `<img src="${photoUrl}" alt="Current photo" style="max-width: 100%; max-height: 200px; border-radius: 8px;">`;
+                document.getElementById('photo-preview').classList.remove('hidden');
+                document.getElementById('remove-photo-btn').classList.remove('hidden');
+                document.getElementById('photo-label-text').textContent = '📷 Change Photo';
+            } else {
+                currentPhotoUrl = null;
+                document.getElementById('photo-preview').classList.add('hidden');
+                document.getElementById('remove-photo-btn').classList.add('hidden');
+                document.getElementById('photo-label-text').textContent = '📷 Add Photo (optional)';
+            }
+        } else {
+            currentPhotoUrl = null;
+            document.getElementById('photo-preview').classList.add('hidden');
+            document.getElementById('remove-photo-btn').classList.add('hidden');
+            document.getElementById('photo-label-text').textContent = '📷 Add Photo (optional)';
+        }
+        
         document.getElementById('meal-modal').classList.remove('hidden');
     })
     .catch(error => {
@@ -293,6 +347,8 @@ function editMeal(mealId) {
 function closeMealModal() {
     document.getElementById('meal-modal').classList.add('hidden');
     editingMealId = null;
+    selectedPhoto = null;
+    currentPhotoUrl = null;
 }
 
 function toggleMealMenu(mealId) {
@@ -331,12 +387,21 @@ function showMealDetails(mealId) {
         }
     })
     .then(response => response.json())
-    .then(meal => {
+    .then(async (meal) => {
         const urlLink = meal.url ? `<a href="${escapeHtml(meal.url)}" target="_blank" rel="noopener noreferrer" class="detail-url">🔗 View Recipe</a>` : '<p class="no-url">No recipe URL provided</p>';
+        
+        let photoHtml = '<p class="no-url">No photo</p>';
+        if (meal.photo_filename) {
+            const photoUrl = await loadMealPhoto(mealId);
+            if (photoUrl) {
+                photoHtml = `<a href="${photoUrl}" target="_blank" rel="noopener noreferrer" style="display: block; cursor: pointer;"><img src="${photoUrl}" alt="${escapeHtml(meal.name)}" style="max-width: 100%; border-radius: 8px; margin-top: 10px; cursor: pointer;"></a>`;
+            }
+        }
         
         document.getElementById('detail-name').textContent = meal.name;
         document.getElementById('detail-description').textContent = meal.description || 'No description';
         document.getElementById('detail-url').innerHTML = urlLink;
+        document.getElementById('detail-photo').innerHTML = photoHtml;
         document.getElementById('detail-date').textContent = new Date(meal.created_at).toLocaleString();
         document.getElementById('detail-modal').classList.remove('hidden');
     })
@@ -357,20 +422,27 @@ async function saveMeal(event) {
     const description = document.getElementById('meal-description').value;
     const mealUrl = document.getElementById('meal-url').value.trim();
     
+    const formData = new FormData();
+    formData.append('name', name);
+    if (description) formData.append('description', description);
+    if (mealUrl) formData.append('url', mealUrl);
+    if (selectedPhoto) {
+        formData.append('photo', selectedPhoto);
+    } else if (editingMealId && !currentPhotoUrl) {
+        // If editing and photo was removed
+        formData.append('remove_photo', 'true');
+    }
+    
     const url = editingMealId ? `${API_BASE}/meals/${editingMealId}` : `${API_BASE}/meals`;
     const method = editingMealId ? 'PUT' : 'POST';
-    const body = editingMealId 
-        ? { name, description: description || null, url: mealUrl || null }
-        : { name, description: description || null, url: mealUrl || null };
     
     try {
         const response = await fetch(url, {
             method: method,
             headers: {
-                'Content-Type': 'application/json',
                 'Authorization': `Bearer ${currentToken}`
             },
-            body: JSON.stringify(body)
+            body: formData
         });
         
         if (response.ok) {
@@ -382,6 +454,84 @@ async function saveMeal(event) {
         }
     } catch (error) {
         alert('Network error. Please try again.');
+    }
+}
+
+function handlePhotoSelect(event) {
+    const file = event.target.files[0];
+    if (file) {
+        selectedPhoto = file;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            document.getElementById('photo-preview').innerHTML = `<img src="${e.target.result}" alt="Preview" style="max-width: 100%; max-height: 200px; border-radius: 8px;">`;
+            document.getElementById('photo-preview').classList.remove('hidden');
+            document.getElementById('remove-photo-btn').classList.remove('hidden');
+            document.getElementById('photo-label-text').textContent = '📷 Change Photo';
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function removePhoto() {
+    selectedPhoto = null;
+    currentPhotoUrl = null;
+    document.getElementById('meal-photo').value = '';
+    document.getElementById('photo-preview').classList.add('hidden');
+    document.getElementById('photo-preview').innerHTML = '';
+    document.getElementById('remove-photo-btn').classList.add('hidden');
+    document.getElementById('photo-label-text').textContent = '📷 Add Photo (optional)';
+}
+
+function filterMeals() {
+    applySortAndDisplay();
+}
+
+function applySortAndDisplay() {
+    const searchTerm = document.getElementById('search-box').value.toLowerCase();
+    let filtered = allMeals.filter(meal => 
+        meal.name.toLowerCase().includes(searchTerm) ||
+        (meal.description && meal.description.toLowerCase().includes(searchTerm))
+    );
+    
+    // Apply sorting
+    if (sortOrder === 'asc') {
+        filtered = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+    } else {
+        filtered = [...filtered].sort((a, b) => b.name.localeCompare(a.name));
+    }
+    
+    displayMeals(filtered);
+}
+
+function toggleOrdering() {
+    const btn = document.getElementById('order-btn');
+    
+    // Toggle between 'asc' (A-Z) and 'desc' (Z-A)
+    if (sortOrder === 'asc') {
+        sortOrder = 'desc';
+        btn.textContent = 'Z-A';
+    } else {
+        sortOrder = 'asc';
+        btn.textContent = 'A-Z';
+    }
+    
+    applySortAndDisplay();
+}
+
+function toggleDarkMode() {
+    const body = document.body;
+    const isDark = body.classList.toggle('dark-mode');
+    localStorage.setItem('darkMode', isDark);
+    const toggle = document.getElementById('dark-mode-toggle');
+    toggle.textContent = isDark ? '☀️' : '🌙';
+}
+
+function loadDarkMode() {
+    const isDark = localStorage.getItem('darkMode') === 'true';
+    if (isDark) {
+        document.body.classList.add('dark-mode');
+        const toggle = document.getElementById('dark-mode-toggle');
+        if (toggle) toggle.textContent = '☀️';
     }
 }
 
