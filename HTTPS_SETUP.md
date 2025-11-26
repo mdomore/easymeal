@@ -22,7 +22,7 @@ apt install nginx certbot python3-certbot-nginx -y
 ### 3. Copy Nginx Configuration
 
 ```bash
-cd /opt/easymeal/easymeal_reboot
+cd /opt/easymeal
 cp nginx.conf /etc/nginx/sites-available/micmoe
 ln -s /etc/nginx/sites-available/micmoe /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
@@ -49,7 +49,7 @@ ports:
 
 Then restart:
 ```bash
-cd /opt/easymeal/easymeal_reboot
+cd /opt/easymeal
 docker compose -f docker-compose.prod.yml up -d
 ```
 

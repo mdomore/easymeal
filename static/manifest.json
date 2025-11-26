@@ -1,0 +1,55 @@
+{
+  "name": "EasyMeal - Recipe Manager",
+  "short_name": "EasyMeal",
+  "description": "Your personal recipe collection. No ads. No clutter.",
+  "id": "/easymeal/",
+  "start_url": "/easymeal/",
+  "scope": "/easymeal/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2383e2",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/easymeal/static/icon-192.png",
+      "sizes": "192x192 1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/easymeal/static/icon-192.png",
+      "sizes": "192x192 1024x1024",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/easymeal/static/icon-512.png",
+      "sizes": "512x512 1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/easymeal/static/icon-512.png",
+      "sizes": "512x512 1024x1024",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["food", "lifestyle", "productivity"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Add Meal",
+      "short_name": "Add",
+      "description": "Quickly add a new recipe",
+      "url": "/easymeal/?action=add",
+      "icons": [
+        {
+          "src": "/easymeal/static/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}
+

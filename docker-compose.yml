@@ -1,11 +1,62 @@
 services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-easymeal}
+      - POSTGRES_USER=${POSTGRES_USER:-easymeal}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-easymeal}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-easymeal}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"  # API
+      - "9001:9001"  # Console
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
   api:
     build: .
     ports:
       - "8000:8000"
     volumes:
-      - ./data:/app/data
+      - ./data:/app/data  # Keep for migration script access
+      - ./app:/app/app
+      - ./static:/app/static
     environment:
-      - DB_PATH=/app/data/meals.db
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-easymeal}:${POSTGRES_PASSWORD:-easymeal}@postgres:5432/${POSTGRES_DB:-easymeal}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_BUCKET=photos
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  postgres_data:
+  minio_data:
 

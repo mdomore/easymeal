@@ -14,13 +14,12 @@ A Python-based meal recipe application with FastAPI, featuring user authenticati
 
 ## Project Structure
 
-- `easymeal_reboot/` - Main application directory
-  - `app/` - FastAPI application code
-  - `static/` - Frontend files (HTML, CSS, JS)
-  - `data/` - Database and user uploads (not in git)
-  - `docker-compose.prod.yml` - Production Docker configuration
-  - `nginx.conf` - Nginx reverse proxy configuration
-  - `HTTPS_SETUP.md` - SSL certificate setup guide
+- `app/` - FastAPI application code
+- `static/` - Frontend files (HTML, CSS, JS)
+- `data/` - Database and user uploads (not in git)
+- `docker-compose.prod.yml` - Production Docker configuration
+- `nginx.conf` - Nginx reverse proxy configuration
+- `HTTPS_SETUP.md` - SSL certificate setup guide
 
 ## Setup
 
@@ -28,7 +27,6 @@ A Python-based meal recipe application with FastAPI, featuring user authenticati
 
 1. Install dependencies:
 ```bash
-cd easymeal_reboot
 pip install -r requirements.txt
 ```
 
@@ -50,7 +48,6 @@ export SECRET_KEY="your-secret-key-here"
 
 2. Build and run:
 ```bash
-cd easymeal_reboot
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 

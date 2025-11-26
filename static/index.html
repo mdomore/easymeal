@@ -2,31 +2,86 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>EasyMeal - Recipe Manager</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <meta name="description" content="Your personal recipe collection. No ads. No clutter.">
+    <link rel="icon" type="image/png" href="/easymeal/static/icon-192.png">
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#2383e2">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="EasyMeal">
+    <link rel="apple-touch-icon" href="/easymeal/static/icon-192.png">
+    
+    <!-- Manifest -->
+    <link rel="manifest" href="/easymeal/static/manifest.json">
+    
+    <link rel="stylesheet" href="/easymeal/static/style.css">
 </head>
 <body>
     <div id="app">
-        <!-- Login/Register View -->
-        <div id="auth-view" class="view">
-            <div class="auth-container">
-                <div class="auth-header">
-                    <h1>EasyMeal</h1>
-                    <button onclick="toggleDarkMode()" class="btn-dark-mode" id="dark-mode-toggle-auth" title="Toggle dark mode">
-                        <span id="dark-mode-icon-auth">🌙</span>
-                    </button>
+        <!-- Landing Page -->
+        <div id="landing-view" class="view">
+            <nav class="landing-nav">
+                <div class="nav-container">
+                    <div class="nav-logo">EasyMeal</div>
+                    <div class="nav-actions">
+                        <button onclick="toggleDarkMode()" class="btn-dark-mode-nav" id="dark-mode-toggle-landing" title="Toggle dark mode">
+                            <span id="dark-mode-icon-landing">🌙</span>
+                        </button>
+                        <button onclick="showAuthModal()" class="btn-nav-link">Sign in</button>
+                        <button onclick="tryEasyMeal()" class="btn-nav-primary">Try EasyMeal</button>
+                    </div>
                 </div>
+            </nav>
+
+            <main class="landing-main">
+                <section class="hero-section">
+                    <h1 class="hero-title">Your personal recipe collection.<br>No ads. No clutter.</h1>
+                    <p class="hero-subtitle">Organize recipes from any source. Access them anywhere. Keep it simple.</p>
+                    <div class="hero-cta">
+                        <button onclick="tryEasyMeal()" class="btn-hero-primary">Try EasyMeal free</button>
+                        <button id="install-pwa-btn" onclick="installPWA()" class="btn-hero-secondary hidden">Install App</button>
+                        <p class="hero-note">No credit card required • Start in seconds</p>
+                    </div>
+                </section>
+
+                <section class="features-section">
+                    <div class="features-grid">
+                        <div class="feature-card">
+                            <h3>From Any Source</h3>
+                            <p>Import recipes from URLs, photos, text, or books. All in one place.</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>Always Accessible</h3>
+                            <p>Access your recipes from any device. Works offline too.</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>Clean & Simple</h3>
+                            <p>No ads, no distractions. Just your recipes, beautifully organized.</p>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+
+        <!-- Auth Modal -->
+        <div id="auth-modal" class="modal hidden">
+            <div class="modal-content auth-modal-content">
+                <span class="close" onclick="closeAuthModal()">&times;</span>
+                <h2>Sign in to EasyMeal</h2>
                 <div class="auth-tabs">
-                    <button class="tab-btn active" onclick="showLogin()">Login</button>
-                    <button class="tab-btn" onclick="showRegister()">Register</button>
+                    <button class="tab-btn active" onclick="showLoginInModal()">Sign in</button>
+                    <button class="tab-btn" onclick="showRegisterInModal()">Create account</button>
                 </div>
                 
                 <!-- Login Form -->
                 <form id="login-form" class="auth-form" onsubmit="event.preventDefault(); login();">
                     <input type="text" id="login-username" placeholder="Username" autocomplete="username" required>
                     <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" required>
-                    <button type="submit">Login</button>
+                    <button type="submit" class="btn-primary">Sign in</button>
                     <div id="auth-error" class="error-message"></div>
                 </form>
                 
@@ -35,7 +90,7 @@
                     <input type="text" id="register-username" placeholder="Username" autocomplete="username" required>
                     <input type="email" id="register-email" placeholder="Email" autocomplete="email" required>
                     <input type="password" id="register-password" placeholder="Password" autocomplete="new-password" required>
-                    <button type="submit">Register</button>
+                    <button type="submit" class="btn-primary">Create account</button>
                     <div id="register-error" class="error-message"></div>
                 </form>
             </div>
@@ -68,7 +123,34 @@
                     </div>
                 </div>
                 
+                <!-- Temporary Account Prompt -->
+                <div id="temp-account-banner" class="temp-account-banner hidden">
+                    <div class="banner-content">
+                        <span>You're using a temporary account. <a href="#" onclick="showConvertAccountModal(); return false;">Create a permanent account</a> to save your data.</span>
+                        <button onclick="dismissTempBanner()" class="btn-dismiss">×</button>
+                    </div>
+                </div>
+                
                 <div id="meals-list" class="meals-list"></div>
+                
+                <!-- Convert Account Modal -->
+                <div id="convert-account-modal" class="modal hidden">
+                    <div class="modal-content">
+                        <span class="close" onclick="closeConvertModal()">&times;</span>
+                        <h3>Create Permanent Account</h3>
+                        <p>Convert your temporary account to save your recipes permanently and access them from any device.</p>
+                        <form id="convert-form" onsubmit="convertAccount(event)">
+                            <input type="text" id="convert-username" placeholder="Username" autocomplete="username" required>
+                            <input type="email" id="convert-email" placeholder="Email" autocomplete="email" required>
+                            <input type="password" id="convert-password" placeholder="Password" autocomplete="new-password" required>
+                            <div id="convert-error" class="error-message"></div>
+                            <div class="modal-actions">
+                                <button type="button" onclick="closeConvertModal()" class="btn-secondary">Cancel</button>
+                                <button type="submit" class="btn-primary">Create Account</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
                 
                 <!-- Meal Details Modal -->
                 <div id="detail-modal" class="modal hidden">
@@ -137,7 +219,6 @@
         </div>
     </div>
     
-    <script src="/static/app.js"></script>
+    <script src="/easymeal/static/app.js"></script>
 </body>
 </html>
-

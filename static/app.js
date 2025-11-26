@@ -1,4 +1,4 @@
-const API_BASE = '/api';
+const API_BASE = '/easymeal/api';
 let currentToken = null;
 let currentUser = null;
 let editingMealId = null;
@@ -33,25 +33,139 @@ function toggleDarkMode() {
 
 function updateDarkModeIcons(isDark) {
     const icon = isDark ? '☀️' : '🌙';
-    const iconAuth = isDark ? '☀️' : '🌙';
     
     const darkModeIcon = document.getElementById('dark-mode-icon');
     const darkModeIconAuth = document.getElementById('dark-mode-icon-auth');
+    const darkModeIconLanding = document.getElementById('dark-mode-icon-landing');
     
     if (darkModeIcon) darkModeIcon.textContent = icon;
-    if (darkModeIconAuth) darkModeIconAuth.textContent = iconAuth;
+    if (darkModeIconAuth) darkModeIconAuth.textContent = icon;
+    if (darkModeIconLanding) darkModeIconLanding.textContent = icon;
+}
+
+// Register Service Worker for PWA
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/easymeal/static/sw.js', { scope: '/easymeal/' })
+            .then((registration) => {
+                console.log('Service Worker registered:', registration);
+                console.log('Service Worker scope:', registration.scope);
+                
+                // Ensure service worker is active (required for Android PWA installation)
+                if (registration.installing) {
+                    registration.installing.addEventListener('statechange', function() {
+                        if (this.state === 'activated') {
+                            console.log('Service Worker activated');
+                        }
+                    });
+                } else if (registration.waiting) {
+                    registration.waiting.addEventListener('statechange', function() {
+                        if (this.state === 'activated') {
+                            console.log('Service Worker activated');
+                        }
+                    });
+                } else if (registration.active) {
+                    console.log('Service Worker already active');
+                }
+                
+                // Check for updates
+                registration.addEventListener('updatefound', () => {
+                    const newWorker = registration.installing;
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'activated') {
+                            console.log('New Service Worker activated');
+                        }
+                    });
+                });
+            })
+            .catch((error) => {
+                console.error('Service Worker registration failed:', error);
+            });
+    });
 }
 
 // Check if user is already logged in
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
     initDarkMode();
     
     const token = localStorage.getItem('token');
     if (token) {
         currentToken = token;
-        checkAuth();
+        await checkAuth();
+    } else {
+        // No token - show landing page
+        showLandingPage();
     }
+    
+    // Show install prompt if available
+    setupInstallPrompt();
 });
+
+// Landing page functions
+function showLandingPage() {
+    document.getElementById('landing-view').classList.remove('hidden');
+    document.getElementById('meals-view').classList.add('hidden');
+}
+
+function tryEasyMeal() {
+    // Create temporary account and go to app
+    createTempAccount();
+}
+
+async function createTempAccount() {
+    try {
+        const response = await fetch(`${API_BASE}/temp-account`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            currentToken = data.access_token;
+            localStorage.setItem('token', currentToken);
+            console.log('Temporary account created, token received');
+            await checkAuth();
+        } else {
+            console.error('Failed to create temporary account');
+            alert('Failed to start. Please try again.');
+        }
+    } catch (error) {
+        console.error('Error creating temporary account:', error);
+        alert('Network error. Please try again.');
+    }
+}
+
+function showAuthModal() {
+    document.getElementById('auth-modal').classList.remove('hidden');
+    showLoginInModal();
+}
+
+function closeAuthModal() {
+    document.getElementById('auth-modal').classList.add('hidden');
+}
+
+function showLoginInModal() {
+    document.getElementById('login-form').classList.remove('hidden');
+    document.getElementById('register-form').classList.add('hidden');
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-btn')[0].classList.add('active');
+    if (document.getElementById('auth-error')) {
+        document.getElementById('auth-error').textContent = '';
+    }
+}
+
+function showRegisterInModal() {
+    document.getElementById('login-form').classList.add('hidden');
+    document.getElementById('register-form').classList.remove('hidden');
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-btn')[1].classList.add('active');
+    if (document.getElementById('register-error')) {
+        document.getElementById('register-error').textContent = '';
+    }
+}
+
 
 // Auth functions
 async function checkAuth() {
@@ -76,6 +190,12 @@ async function checkAuth() {
         if (response.ok) {
             currentUser = await response.json();
             console.log('Auth successful, user:', currentUser);
+            
+            // Show conversion prompt for temporary accounts
+            if (currentUser.is_temporary) {
+                showTempAccountPrompt();
+            }
+            
             showMealsView();
         } else {
             // 401 is expected if token is invalid/expired, just clear it
@@ -95,31 +215,6 @@ async function checkAuth() {
     }
 }
 
-function showLogin() {
-    document.getElementById('login-form').classList.remove('hidden');
-    document.getElementById('register-form').classList.add('hidden');
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-    document.querySelectorAll('.tab-btn')[0].classList.add('active');
-    if (document.getElementById('auth-error')) {
-        document.getElementById('auth-error').textContent = '';
-    }
-    if (document.getElementById('register-error')) {
-        document.getElementById('register-error').textContent = '';
-    }
-}
-
-function showRegister() {
-    document.getElementById('login-form').classList.add('hidden');
-    document.getElementById('register-form').classList.remove('hidden');
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-    document.querySelectorAll('.tab-btn')[1].classList.add('active');
-    if (document.getElementById('auth-error')) {
-        document.getElementById('auth-error').textContent = '';
-    }
-    if (document.getElementById('register-error')) {
-        document.getElementById('register-error').textContent = '';
-    }
-}
 
 async function login() {
     const username = document.getElementById('login-username').value.trim();
@@ -150,6 +245,7 @@ async function login() {
             localStorage.setItem('token', currentToken);
             console.log('Login successful, token received:', currentToken.substring(0, 20) + '...');
             console.log('Token type:', typeof currentToken, 'Length:', currentToken.length);
+            closeAuthModal();
             await checkAuth();
         } else {
             const errorData = await response.json().catch(() => ({ detail: 'Login failed' }));
@@ -204,6 +300,7 @@ async function register() {
                 currentToken = data.access_token;
                 localStorage.setItem('token', currentToken);
                 console.log('Registration auto-login successful, token received:', currentToken.substring(0, 20) + '...');
+                closeAuthModal();
                 await checkAuth();
             } else {
                 const loginError = await loginResponse.json().catch(() => ({ detail: 'Login failed' }));
@@ -224,8 +321,7 @@ function logout() {
     currentToken = null;
     currentUser = null;
     localStorage.removeItem('token');
-    document.getElementById('auth-view').classList.remove('hidden');
-    document.getElementById('meals-view').classList.add('hidden');
+    showLandingPage();
     document.getElementById('login-username').value = '';
     document.getElementById('login-password').value = '';
     document.getElementById('register-username').value = '';
@@ -233,9 +329,92 @@ function logout() {
     document.getElementById('register-password').value = '';
 }
 
+// Temporary account functions
+function showTempAccountPrompt() {
+    const banner = document.getElementById('temp-account-banner');
+    if (banner && !localStorage.getItem('temp-banner-dismissed')) {
+        banner.classList.remove('hidden');
+    }
+}
+
+function dismissTempBanner() {
+    const banner = document.getElementById('temp-account-banner');
+    if (banner) {
+        banner.classList.add('hidden');
+        localStorage.setItem('temp-banner-dismissed', 'true');
+    }
+}
+
+function showConvertAccountModal() {
+    const modal = document.getElementById('convert-account-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        document.getElementById('convert-error').textContent = '';
+    }
+}
+
+function closeConvertModal() {
+    const modal = document.getElementById('convert-account-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+async function convertAccount(event) {
+    event.preventDefault();
+    
+    const username = document.getElementById('convert-username').value.trim();
+    const email = document.getElementById('convert-email').value.trim();
+    const password = document.getElementById('convert-password').value;
+    const errorDiv = document.getElementById('convert-error');
+    
+    if (!errorDiv) return;
+    
+    errorDiv.textContent = '';
+    
+    if (!username || !email || !password) {
+        errorDiv.textContent = 'Please fill in all fields';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/convert-account`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${currentToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username, email, password })
+        });
+        
+        if (response.ok) {
+            const userData = await response.json();
+            currentUser = userData;
+            
+            // Hide temp account banner
+            dismissTempBanner();
+            closeConvertModal();
+            
+            // Show success message
+            alert('Account converted successfully! Your recipes are now saved permanently.');
+        } else {
+            const errorData = await response.json().catch(() => ({ detail: 'Conversion failed' }));
+            errorDiv.textContent = errorData.detail || 'Conversion failed';
+        }
+    } catch (error) {
+        console.error('Convert account error:', error);
+        errorDiv.textContent = 'Network error. Please try again.';
+    }
+}
+
 function showMealsView() {
-    document.getElementById('auth-view').classList.add('hidden');
+    document.getElementById('landing-view').classList.add('hidden');
+    document.getElementById('auth-modal').classList.add('hidden');
     document.getElementById('meals-view').classList.remove('hidden');
+    
+    // Setup offline sync
+    setupOfflineSync();
+    
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
         searchInput.value = ''; // Clear search on view change
@@ -250,6 +429,195 @@ function showMealsView() {
     loadMeals();
 }
 
+// PWA Install Prompt
+let deferredPrompt = null;
+
+function setupInstallPrompt() {
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        showInstallButton();
+    });
+    
+    // Check if already installed
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+        console.log('App is already installed');
+    }
+}
+
+function showInstallButton() {
+    // Show install button in the landing page
+    const installBtn = document.getElementById('install-pwa-btn');
+    if (installBtn) {
+        installBtn.classList.remove('hidden');
+        installBtn.onclick = installPWA;
+    }
+    console.log('Install prompt available');
+}
+
+async function installPWA() {
+    if (!deferredPrompt) {
+        return;
+    }
+    
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`User response to install prompt: ${outcome}`);
+    deferredPrompt = null;
+}
+
+// Offline Sync
+let offlineQueue = [];
+let isOnline = navigator.onLine;
+
+function setupOfflineSync() {
+    // Listen for online/offline events
+    window.addEventListener('online', () => {
+        isOnline = true;
+        console.log('Online - syncing pending actions');
+        syncOfflineActions();
+    });
+    
+    window.addEventListener('offline', () => {
+        isOnline = false;
+        console.log('Offline mode');
+        showOfflineIndicator();
+    });
+    
+    // Load meals from IndexedDB if available
+    loadMealsFromCache();
+}
+
+function showOfflineIndicator() {
+    // Could show a banner indicating offline mode
+    console.log('App is offline');
+}
+
+async function syncOfflineActions() {
+    if (offlineQueue.length === 0) return;
+    
+    console.log(`Syncing ${offlineQueue.length} offline actions...`);
+    
+    for (const action of offlineQueue) {
+        try {
+            await executeAction(action);
+        } catch (error) {
+            console.error('Failed to sync action:', error);
+        }
+    }
+    
+    offlineQueue = [];
+    await loadMeals(); // Reload after sync
+}
+
+async function executeAction(action) {
+    const { type, data } = action;
+    
+    switch (type) {
+        case 'create':
+            return await createMealOffline(data);
+        case 'update':
+            return await updateMealOffline(data.id, data);
+        case 'delete':
+            return await deleteMealOffline(data.id);
+    }
+}
+
+async function createMealOffline(mealData) {
+    const response = await fetch(`${API_BASE}/meals`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${currentToken}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(mealData)
+    });
+    
+    if (!response.ok) throw new Error('Failed to create meal');
+    return await response.json();
+}
+
+async function updateMealOffline(mealId, mealData) {
+    const response = await fetch(`${API_BASE}/meals/${mealId}`, {
+        method: 'PUT',
+        headers: {
+            'Authorization': `Bearer ${currentToken}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(mealData)
+    });
+    
+    if (!response.ok) throw new Error('Failed to update meal');
+    return await response.json();
+}
+
+async function deleteMealOffline(mealId) {
+    const response = await fetch(`${API_BASE}/meals/${mealId}`, {
+        method: 'DELETE',
+        headers: {
+            'Authorization': `Bearer ${currentToken}`
+        }
+    });
+    
+    if (!response.ok) throw new Error('Failed to delete meal');
+}
+
+// Cache meals in IndexedDB
+async function cacheMeals(meals) {
+    if ('indexedDB' in window) {
+        try {
+            const db = await openDB();
+            const tx = db.transaction(['meals'], 'readwrite');
+            const store = tx.objectStore('meals');
+            
+            // Clear old data
+            await store.clear();
+            
+            // Store new meals
+            for (const meal of meals) {
+                await store.add(meal);
+            }
+        } catch (error) {
+            console.error('Failed to cache meals:', error);
+        }
+    }
+}
+
+async function loadMealsFromCache() {
+    if ('indexedDB' in window && !isOnline) {
+        try {
+            const db = await openDB();
+            const tx = db.transaction(['meals'], 'readonly');
+            const store = tx.objectStore('meals');
+            const cachedMeals = await store.getAll();
+            
+            if (cachedMeals.length > 0) {
+                allMeals = cachedMeals;
+                filterAndDisplayMeals();
+                console.log('Loaded meals from cache');
+            }
+        } catch (error) {
+            console.error('Failed to load from cache:', error);
+        }
+    }
+}
+
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open('easymeal-db', 1);
+        
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+        
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains('meals')) {
+                db.createObjectStore('meals', { keyPath: 'id' });
+            }
+        };
+    });
+}
+
 // Meal functions
 async function loadMeals() {
     try {
@@ -261,10 +629,17 @@ async function loadMeals() {
         
         if (response.ok) {
             allMeals = await response.json();
+            await cacheMeals(allMeals);
             filterAndDisplayMeals();
+        } else if (!isOnline) {
+            // Offline - load from cache
+            await loadMealsFromCache();
         }
     } catch (error) {
         console.error('Failed to load meals:', error);
+        if (!isOnline) {
+            await loadMealsFromCache();
+        }
     }
 }
 
@@ -286,7 +661,11 @@ function displayMeals(meals) {
     const mealsList = document.getElementById('meals-list');
     
     if (meals.length === 0) {
-        mealsList.innerHTML = '<p class="empty-message">No meals yet. Click "Add Meal" to create your first one!</p>';
+        let emptyMessage = '<p class="empty-message">No meals yet. Click "Add Meal" to create your first one!</p>';
+        if (currentUser && currentUser.is_temporary) {
+            emptyMessage = '<div class="empty-message"><p><strong>Welcome to EasyMeal!</strong></p><p>You\'re using a temporary account. Start adding meals, or <a href="#" onclick="showConvertAccountModal(); return false;">create a permanent account</a> to save your recipes.</p></div>';
+        }
+        mealsList.innerHTML = emptyMessage;
         return;
     }
     
@@ -356,12 +735,12 @@ function editMeal(mealId) {
         document.getElementById('meal-photo').value = '';
         
         // Track original photo and show existing photo if any
-        originalMealPhoto = meal.photo || null;
+        originalMealPhoto = meal.photo_filename || null;
         photoRemoved = false;
         const photoPreview = document.getElementById('photo-preview');
         const removeBtn = document.getElementById('remove-photo-btn');
-        if (meal.photo) {
-            photoPreview.innerHTML = `<img src="/static/photos/${escapeHtml(meal.photo)}" alt="Meal photo" class="preview-image">`;
+        if (meal.photo_filename) {
+            photoPreview.innerHTML = `<img src="static/photos/${escapeHtml(meal.photo_filename)}" alt="Meal photo" class="preview-image">`;
             removeBtn.classList.remove('hidden');
         } else {
             photoPreview.innerHTML = '';
@@ -455,8 +834,8 @@ function showMealDetails(mealId) {
         // Show/hide photo section
         const photoSection = document.getElementById('detail-photo-section');
         const photoDiv = document.getElementById('detail-photo');
-        if (meal.photo) {
-            const photoUrl = `/static/photos/${escapeHtml(meal.photo)}`;
+        if (meal.photo_filename) {
+            const photoUrl = `static/photos/${escapeHtml(meal.photo_filename)}`;
             photoDiv.innerHTML = `<a href="${photoUrl}" target="_blank" rel="noopener noreferrer" class="detail-photo-link"><img src="${photoUrl}" alt="${escapeHtml(meal.name)}" class="detail-photo-image"></a>`;
             photoSection.classList.remove('hidden');
         } else {
@@ -521,9 +900,9 @@ async function saveMeal(event) {
                 photoFilename = "";
                 shouldUpdatePhoto = true;
             } else if (!photoRemoved && originalMealPhoto) {
-                // Keep existing photo (no changes)
-                photoFilename = originalMealPhoto;
-                shouldUpdatePhoto = true;
+                // Keep existing photo (no changes) - don't update
+                photoFilename = null;
+                shouldUpdatePhoto = false;
             }
             // If there was no original photo and no new file, don't update photo field
         }
@@ -539,7 +918,35 @@ async function saveMeal(event) {
         
         // Include photo in body if it's being set/updated
         if (shouldUpdatePhoto && photoFilename !== null) {
-            body.photo = photoFilename;
+            body.photo_filename = photoFilename;
+        }
+        
+        // Check if offline
+        if (!isOnline) {
+            // Queue for offline sync
+            const action = {
+                type: editingMealId ? 'update' : 'create',
+                data: editingMealId ? { id: editingMealId, ...body } : body
+            };
+            offlineQueue.push(action);
+            
+            // Update local cache immediately for better UX
+            if (editingMealId) {
+                const mealIndex = allMeals.findIndex(m => m.id === editingMealId);
+                if (mealIndex !== -1) {
+                    allMeals[mealIndex] = { ...allMeals[mealIndex], ...body };
+                }
+            } else {
+                // Create temporary ID for new meal
+                const tempId = Date.now();
+                allMeals.push({ id: tempId, ...body, created_at: new Date().toISOString() });
+            }
+            
+            await cacheMeals(allMeals);
+            filterAndDisplayMeals();
+            closeMealModal();
+            alert('Saved offline. Will sync when connection is restored.');
+            return;
         }
         
         const response = await fetch(url, {
@@ -560,7 +967,19 @@ async function saveMeal(event) {
         }
     } catch (error) {
         console.error('Save meal error:', error);
-        alert('Network error. Please try again.');
+        if (!isOnline) {
+            // Queue for offline sync
+            const action = {
+                type: editingMealId ? 'update' : 'create',
+                data: editingMealId ? { id: editingMealId, name, description, url } : { name, description, url }
+            };
+            offlineQueue.push(action);
+            alert('Saved offline. Will sync when connection is restored.');
+            closeMealModal();
+            loadMeals();
+        } else {
+            alert('Network error. Please try again.');
+        }
     }
 }
 
@@ -592,6 +1011,22 @@ async function confirmDelete() {
     document.getElementById('delete-confirm-modal').classList.add('hidden');
     
     try {
+        // Check if offline
+        if (!isOnline) {
+            // Queue for offline sync
+            offlineQueue.push({
+                type: 'delete',
+                data: { id: mealId }
+            });
+            
+            // Update local cache immediately
+            allMeals = allMeals.filter(m => m.id !== mealId);
+            await cacheMeals(allMeals);
+            filterAndDisplayMeals();
+            alert('Deleted offline. Will sync when connection is restored.');
+            return;
+        }
+        
         const response = await fetch(`${API_BASE}/meals/${mealId}`, {
             method: 'DELETE',
             headers: {
@@ -606,7 +1041,19 @@ async function confirmDelete() {
             alert(error.detail || 'Failed to delete meal');
         }
     } catch (error) {
-        alert('Network error. Please try again.');
+        console.error('Delete meal error:', error);
+        if (!isOnline) {
+            offlineQueue.push({
+                type: 'delete',
+                data: { id: mealId }
+            });
+            allMeals = allMeals.filter(m => m.id !== mealId);
+            await cacheMeals(allMeals);
+            filterAndDisplayMeals();
+            alert('Deleted offline. Will sync when connection is restored.');
+        } else {
+            alert('Network error. Please try again.');
+        }
     }
 }
 

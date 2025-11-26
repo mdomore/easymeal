@@ -2,19 +2,21 @@ from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import RedirectResponse, FileResponse
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional
 from datetime import datetime, timedelta
-import sqlite3
 import os
 from jose import JWTError, jwt
 import bcrypt
-import shutil
-import uuid
 from pathlib import Path
+from sqlalchemy.orm import Session
+import uuid
 
-app = FastAPI(title="EasyMeal Recipe App", version="1.0.0")
+from app.database import get_db, init_db, User, Meal
+from app.storage import upload_photo, delete_photo, get_photo_url, ensure_bucket_exists
+
+app = FastAPI(title="EasyMeal Recipe App", version="1.0.0", root_path="/easymeal")
 
 # CORS middleware for frontend integration
 app.add_middleware(
@@ -32,33 +34,25 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30 * 24 * 60  # 30 days
 
 security = HTTPBearer()
 
-# Database path
-DB_PATH = os.getenv("DB_PATH", "meals.db")
-# Photos directory - store in data directory for persistence
-PHOTOS_DIR_ENV = os.getenv("PHOTOS_DIR")
-if PHOTOS_DIR_ENV:
-    PHOTOS_DIR = Path(PHOTOS_DIR_ENV)
-else:
-    # Default to data/photos if DB_PATH is in data directory, otherwise static/photos
-    db_path_obj = Path(DB_PATH)
-    if db_path_obj.parent.name == "data" or str(db_path_obj).startswith("/app/data"):
-        PHOTOS_DIR = Path("data/photos")
-    else:
-        PHOTOS_DIR = Path("static/photos")
-PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
-
-
 # Pydantic models
-class User(BaseModel):
+class UserResponse(BaseModel):
     id: Optional[int] = None
-    username: str
-    email: str
+    username: Optional[str] = None
+    email: Optional[str] = None
+    is_temporary: Optional[bool] = None
+    is_premium: Optional[bool] = None
 
     class Config:
         from_attributes = True
 
 
 class UserRegister(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+
+
+class AccountConvert(BaseModel):
     username: str
     email: EmailStr
     password: str
@@ -74,13 +68,13 @@ class Token(BaseModel):
     token_type: str
 
 
-class Meal(BaseModel):
+class MealResponse(BaseModel):
     id: Optional[int] = None
     name: str
     description: Optional[str] = None
     url: Optional[str] = None
-    photo: Optional[str] = None
-    created_at: Optional[str] = None
+    photo_filename: Optional[str] = None
+    created_at: Optional[datetime] = None
     user_id: Optional[int] = None
 
     class Config:
@@ -91,61 +85,13 @@ class MealCreate(BaseModel):
     name: str
     description: Optional[str] = None
     url: Optional[str] = None
-    photo: Optional[str] = None
 
 
 class MealUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     url: Optional[str] = None
-    photo: Optional[str] = None
-
-
-# Database initialization
-def init_db():
-    # Ensure the directory exists
-    db_dir = os.path.dirname(DB_PATH)
-    if db_dir and not os.path.exists(db_dir):
-        os.makedirs(db_dir, exist_ok=True)
-    
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    # Users table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            email TEXT NOT NULL UNIQUE,
-            password_hash TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        )
-    """)
-    
-    # Meals table with user_id
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS meals (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            description TEXT,
-            url TEXT,
-            photo TEXT,
-            created_at TEXT NOT NULL,
-            user_id INTEGER NOT NULL,
-            FOREIGN KEY (user_id) REFERENCES users(id)
-        )
-    """)
-    
-    # Add url column if it doesn't exist (for existing databases)
-    cursor.execute("PRAGMA table_info(meals)")
-    columns = [column[1] for column in cursor.fetchall()]
-    if 'url' not in columns:
-        cursor.execute("ALTER TABLE meals ADD COLUMN url TEXT")
-    if 'photo' not in columns:
-        cursor.execute("ALTER TABLE meals ADD COLUMN photo TEXT")
-    
-    conn.commit()
-    conn.close()
+    photo_filename: Optional[str] = None
 
 
 # Password hashing
@@ -154,7 +100,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def get_password_hash(password: str) -> str:
-    # Hash password with bcrypt
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
     return hashed.decode('utf-8')
@@ -172,8 +117,27 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 
+# Helper function to create temporary account
+def create_temporary_account(db: Session) -> User:
+    """Create a new temporary account"""
+    temp_user = User(
+        username=None,
+        email=None,
+        password_hash=None,
+        is_temporary=True,
+        is_premium=False
+    )
+    db.add(temp_user)
+    db.commit()
+    db.refresh(temp_user)
+    return temp_user
+
+
 # Authentication dependency
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -182,81 +146,77 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     
     try:
         if credentials is None:
-            print("ERROR: No credentials provided")
             raise credentials_exception
             
         token = credentials.credentials
-        print(f"DEBUG: Received token (first 30 chars): {token[:30] if token else 'None'}...")
         
         if not token:
-            print("ERROR: Empty token")
             raise credentials_exception
         
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            print(f"DEBUG: JWT payload decoded successfully: {payload}")
-        except JWTError as jwt_err:
-            print(f"ERROR: JWT decode failed: {jwt_err}")
+        except JWTError:
             raise credentials_exception
         
         user_id_str = payload.get("sub")
         if user_id_str is None:
-            print(f"ERROR: No user_id in token payload: {payload}")
             raise credentials_exception
         
-        # Convert string user_id back to integer for database lookup
         try:
             user_id = int(user_id_str)
-            print(f"DEBUG: Decoded user_id: {user_id}, type: {type(user_id)}")
         except (ValueError, TypeError):
-            print(f"ERROR: Invalid user_id format: {user_id_str}")
             raise credentials_exception
         
-    except HTTPException:
-        # Re-raise HTTP exceptions
-        raise
-    except Exception as e:
-        print(f"ERROR: Unexpected auth error: {type(e).__name__}: {e}")
-        import traceback
-        traceback.print_exc()
-        raise credentials_exception
-    
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, username, email FROM users WHERE id = ?", (user_id,))
-        row = cursor.fetchone()
-        conn.close()
-        
-        if row is None:
-            print(f"ERROR: User not found in database for user_id: {user_id}")
+        user = db.query(User).filter(User.id == user_id).first()
+        if user is None:
             raise credentials_exception
         
-        print(f"DEBUG: User found successfully: {dict(row)}")
-        return dict(row)
+        return {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "is_temporary": user.is_temporary,
+            "is_premium": user.is_premium
+        }
     except HTTPException:
         raise
     except Exception as e:
-        print(f"ERROR: Database error: {e}")
+        print(f"ERROR: Auth error: {e}")
         raise credentials_exception
 
 
 @app.on_event("startup")
 async def startup_event():
+    """Initialize database and MinIO bucket on startup"""
     init_db()
+    try:
+        ensure_bucket_exists()
+    except Exception as e:
+        print(f"Warning: Could not initialize MinIO bucket: {e}")
 
 
-# Serve photos from persisted directory (data/photos or static/photos)
-# This route must be defined BEFORE the static mount to take precedence
+# Serve photos from MinIO via redirect
 @app.get("/static/photos/{filename}")
 async def serve_photo(filename: str):
-    """Serve photos from the persisted photos directory"""
-    photo_path = PHOTOS_DIR / filename
-    if photo_path.exists() and photo_path.is_file():
-        return FileResponse(photo_path)
-    else:
+    """Redirect to MinIO presigned URL for photo"""
+    try:
+        photo_url = get_photo_url(filename, expires_in_seconds=3600)
+        return RedirectResponse(url=photo_url)
+    except Exception as e:
         raise HTTPException(status_code=404, detail="Photo not found")
+
+
+# Serve service worker with correct MIME type
+@app.get("/static/sw.js")
+async def serve_service_worker():
+    """Serve service worker with correct content type"""
+    return FileResponse("static/sw.js", media_type="application/javascript")
+
+# Serve manifest.json
+@app.get("/static/manifest.json")
+async def serve_manifest():
+    """Serve manifest.json with correct content type"""
+    return FileResponse("static/manifest.json", media_type="application/manifest+json")
 
 # Serve static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -268,222 +228,244 @@ async def read_root():
 
 
 # Authentication endpoints
-@app.post("/api/register", response_model=User, status_code=201)
-async def register(user: UserRegister):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
+@app.post("/api/register", response_model=UserResponse, status_code=201)
+async def register(user: UserRegister, db: Session = Depends(get_db)):
     # Check if username exists
-    cursor.execute("SELECT id FROM users WHERE username = ?", (user.username,))
-    if cursor.fetchone():
-        conn.close()
+    existing_user = db.query(User).filter(User.username == user.username).first()
+    if existing_user:
         raise HTTPException(status_code=400, detail="Username already registered")
     
     # Check if email exists
-    cursor.execute("SELECT id FROM users WHERE email = ?", (user.email,))
-    if cursor.fetchone():
-        conn.close()
+    existing_email = db.query(User).filter(User.email == user.email).first()
+    if existing_email:
         raise HTTPException(status_code=400, detail="Email already registered")
     
     password_hash = get_password_hash(user.password)
-    created_at = datetime.now().isoformat()
-    cursor.execute(
-        "INSERT INTO users (username, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
-        (user.username, user.email, password_hash, created_at)
+    new_user = User(
+        username=user.username,
+        email=user.email,
+        password_hash=password_hash,
+        is_temporary=False,
+        is_premium=False
     )
-    user_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
     
-    return {"id": user_id, "username": user.username, "email": user.email}
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    return {
+        "id": new_user.id,
+        "username": new_user.username,
+        "email": new_user.email,
+        "is_temporary": new_user.is_temporary,
+        "is_premium": new_user.is_premium
+    }
 
 
 @app.post("/api/login", response_model=Token)
-async def login(user: UserLogin):
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE username = ?", (user.username,))
-    row = cursor.fetchone()
-    conn.close()
+async def login(user: UserLogin, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.username == user.username).first()
     
-    if row is None or not verify_password(user.password, row["password_hash"]):
+    if db_user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    user_id = row["id"]
-    # Ensure user_id is an integer, then convert to string for JWT (sub must be a string)
-    if not isinstance(user_id, int):
-        user_id = int(user_id)
-    # JWT 'sub' claim must be a string
-    access_token = create_access_token(data={"sub": str(user_id)})
+    # Temporary accounts cannot login with username/password
+    if db_user.is_temporary:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Temporary accounts cannot login. Please convert your account first.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    if not db_user.password_hash or not verify_password(user.password, db_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token = create_access_token(data={"sub": str(db_user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@app.get("/api/me", response_model=User)
+@app.get("/api/me", response_model=UserResponse)
 async def get_current_user_info(current_user: dict = Depends(get_current_user)):
     return current_user
 
 
-# Admin endpoint to view all users (for debugging - remove in production)
-@app.get("/api/users")
-async def get_all_users():
-    """Get all users - for debugging purposes only"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, username, email, created_at FROM users ORDER BY created_at DESC")
-    rows = cursor.fetchall()
-    conn.close()
+# Temporary account endpoints
+@app.post("/api/temp-account", response_model=Token)
+async def create_temp_account(db: Session = Depends(get_db)):
+    """Create a temporary account and return a token"""
+    temp_user = create_temporary_account(db)
+    access_token = create_access_token(data={"sub": str(temp_user.id)})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.post("/api/convert-account", response_model=UserResponse, status_code=200)
+async def convert_account(
+    account_data: AccountConvert,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Convert a temporary account to a permanent account"""
+    # Verify current user is temporary
+    user_id = current_user["id"]
+    db_user = db.query(User).filter(User.id == user_id).first()
     
-    users = [dict(row) for row in rows]
-    return users
-
-
-# Meal endpoints (protected)
-@app.get("/api/meals", response_model=List[Meal])
-async def get_meals(current_user: dict = Depends(get_current_user)):
-    """Get all meals for the current user"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT * FROM meals WHERE user_id = ? ORDER BY created_at DESC",
-        (current_user["id"],)
-    )
-    rows = cursor.fetchall()
-    conn.close()
+    if not db_user or not db_user.is_temporary:
+        raise HTTPException(
+            status_code=400,
+            detail="Account is not temporary or does not exist"
+        )
     
-    meals = [dict(row) for row in rows]
-    return meals
-
-
-@app.get("/api/meals/{meal_id}", response_model=Meal)
-async def get_meal(meal_id: int, current_user: dict = Depends(get_current_user)):
-    """Get a specific meal by ID"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT * FROM meals WHERE id = ? AND user_id = ?",
-        (meal_id, current_user["id"])
-    )
-    row = cursor.fetchone()
-    conn.close()
+    # Check if username exists
+    existing_user = db.query(User).filter(User.username == account_data.username).first()
+    if existing_user and existing_user.id != user_id:
+        raise HTTPException(status_code=400, detail="Username already taken")
     
-    if row is None:
-        raise HTTPException(status_code=404, detail="Meal not found")
+    # Check if email exists
+    existing_email = db.query(User).filter(User.email == account_data.email).first()
+    if existing_email and existing_email.id != user_id:
+        raise HTTPException(status_code=400, detail="Email already registered")
     
-    return dict(row)
-
-
-@app.post("/api/meals", response_model=Meal, status_code=201)
-async def create_meal(meal: MealCreate, current_user: dict = Depends(get_current_user)):
-    """Create a new meal"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    created_at = datetime.now().isoformat()
-    cursor.execute(
-        "INSERT INTO meals (name, description, url, photo, created_at, user_id) VALUES (?, ?, ?, ?, ?, ?)",
-        (meal.name, meal.description, meal.url, meal.photo, created_at, current_user["id"])
-    )
-    meal_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
+    # Update user to permanent account
+    db_user.username = account_data.username
+    db_user.email = account_data.email
+    db_user.password_hash = get_password_hash(account_data.password)
+    db_user.is_temporary = False
+    
+    db.commit()
+    db.refresh(db_user)
     
     return {
-        "id": meal_id,
-        "name": meal.name,
-        "description": meal.description,
-        "url": meal.url,
-        "photo": meal.photo,
-        "created_at": created_at,
-        "user_id": current_user["id"]
+        "id": db_user.id,
+        "username": db_user.username,
+        "email": db_user.email,
+        "is_temporary": db_user.is_temporary,
+        "is_premium": db_user.is_premium
     }
 
 
-@app.put("/api/meals/{meal_id}", response_model=Meal)
+# Admin endpoint to view all users (for debugging - remove in production)
+@app.get("/api/users")
+async def get_all_users(db: Session = Depends(get_db)):
+    """Get all users - for debugging purposes only"""
+    users = db.query(User).order_by(User.created_at.desc()).all()
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "email": u.email,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+            "is_temporary": u.is_temporary
+        }
+        for u in users
+    ]
+
+
+# Meal endpoints (protected)
+@app.get("/api/meals", response_model=List[MealResponse])
+async def get_meals(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all meals for the current user"""
+    meals = db.query(Meal).filter(
+        Meal.user_id == current_user["id"]
+    ).order_by(Meal.created_at.desc()).all()
+    
+    return meals
+
+
+@app.get("/api/meals/{meal_id}", response_model=MealResponse)
+async def get_meal(
+    meal_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get a specific meal by ID"""
+    meal = db.query(Meal).filter(
+        Meal.id == meal_id,
+        Meal.user_id == current_user["id"]
+    ).first()
+    
+    if meal is None:
+        raise HTTPException(status_code=404, detail="Meal not found")
+    
+    return meal
+
+
+@app.post("/api/meals", response_model=MealResponse, status_code=201)
+async def create_meal(
+    meal: MealCreate,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new meal"""
+    new_meal = Meal(
+        name=meal.name,
+        description=meal.description,
+        url=meal.url,
+        photo_filename=None,
+        user_id=current_user["id"]
+    )
+    
+    db.add(new_meal)
+    db.commit()
+    db.refresh(new_meal)
+    
+    return new_meal
+
+
+@app.put("/api/meals/{meal_id}", response_model=MealResponse)
 async def update_meal(
     meal_id: int,
     meal: MealUpdate,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """Update a meal"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
+    db_meal = db.query(Meal).filter(
+        Meal.id == meal_id,
+        Meal.user_id == current_user["id"]
+    ).first()
     
-    # Check if meal exists and belongs to user
-    cursor.execute(
-        "SELECT * FROM meals WHERE id = ? AND user_id = ?",
-        (meal_id, current_user["id"])
-    )
-    row = cursor.fetchone()
-    
-    if row is None:
-        conn.close()
+    if db_meal is None:
         raise HTTPException(status_code=404, detail="Meal not found")
     
+    old_photo_filename = db_meal.photo_filename
+    
+    # Handle photo removal (empty string means remove)
+    if meal.photo_filename == "" and old_photo_filename:
+        delete_photo(old_photo_filename)
+        db_meal.photo_filename = None
+    
     # Update fields
-    update_fields = []
-    values = []
     if meal.name is not None:
-        update_fields.append("name = ?")
-        values.append(meal.name)
+        db_meal.name = meal.name
     if meal.description is not None:
-        update_fields.append("description = ?")
-        values.append(meal.description)
+        db_meal.description = meal.description
     if meal.url is not None:
-        update_fields.append("url = ?")
-        values.append(meal.url)
-    if meal.photo is not None:
-        if meal.photo == "":
-            # Delete photo if explicitly set to empty string
-            if row["photo"]:
-                old_photo_path = PHOTOS_DIR / row["photo"]
-                if old_photo_path.exists():
-                    old_photo_path.unlink()
-            update_fields.append("photo = ?")
-            values.append(None)
-        else:
-            # Delete old photo if it exists and new photo is being set
-            if row["photo"]:
-                old_photo_path = PHOTOS_DIR / row["photo"]
-                if old_photo_path.exists():
-                    old_photo_path.unlink()
-            update_fields.append("photo = ?")
-            values.append(meal.photo)
+        db_meal.url = meal.url
+    if meal.photo_filename is not None and meal.photo_filename != old_photo_filename:
+        db_meal.photo_filename = meal.photo_filename
     
-    if not update_fields:
-        conn.close()
-        return dict(row)
+    db.commit()
+    db.refresh(db_meal)
     
-    values.extend([meal_id, current_user["id"]])
-    cursor.execute(
-        f"UPDATE meals SET {', '.join(update_fields)} WHERE id = ? AND user_id = ?",
-        values
-    )
-    conn.commit()
-    
-    # Fetch updated meal
-    cursor.execute(
-        "SELECT * FROM meals WHERE id = ? AND user_id = ?",
-        (meal_id, current_user["id"])
-    )
-    updated_row = cursor.fetchone()
-    conn.close()
-    
-    return dict(updated_row)
+    return db_meal
 
 
 # Maximum file size: 10MB
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB in bytes
 
 @app.post("/api/meals/upload-photo")
-async def upload_photo(
+async def upload_photo_endpoint(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
@@ -500,51 +482,61 @@ async def upload_photo(
             detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024 * 1024)}MB"
         )
     
-    # Generate unique filename
+    # Determine file extension
     file_ext = Path(file.filename).suffix if file.filename else '.jpg'
-    unique_filename = f"{uuid.uuid4()}{file_ext}"
-    file_path = PHOTOS_DIR / unique_filename
+    if not file_ext:
+        file_ext = '.jpg'
     
-    # Save file
+    # Upload to MinIO
     try:
-        with open(file_path, "wb") as buffer:
-            buffer.write(file_content)
+        filename = upload_photo(file_content, file_ext)
+        return {"filename": filename}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save photo: {str(e)}")
-    
-    return {"filename": unique_filename}
+        raise HTTPException(status_code=500, detail=f"Failed to upload photo: {str(e)}")
 
 
 @app.delete("/api/meals/{meal_id}", status_code=204)
-async def delete_meal(meal_id: int, current_user: dict = Depends(get_current_user)):
+async def delete_meal(
+    meal_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Delete a meal by ID"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
+    meal = db.query(Meal).filter(
+        Meal.id == meal_id,
+        Meal.user_id == current_user["id"]
+    ).first()
     
-    # Get meal to delete photo if exists
-    cursor.execute(
-        "SELECT photo FROM meals WHERE id = ? AND user_id = ?",
-        (meal_id, current_user["id"])
-    )
-    row = cursor.fetchone()
-    
-    if row is None:
-        conn.close()
+    if meal is None:
         raise HTTPException(status_code=404, detail="Meal not found")
     
-    # Delete photo file if exists
-    if row["photo"]:
-        photo_path = PHOTOS_DIR / row["photo"]
-        if photo_path.exists():
-            photo_path.unlink()
+    # Delete photo if exists
+    if meal.photo_filename:
+        delete_photo(meal.photo_filename)
     
-    # Delete meal
-    cursor.execute(
-        "DELETE FROM meals WHERE id = ? AND user_id = ?",
-        (meal_id, current_user["id"])
-    )
-    conn.commit()
-    conn.close()
+    db.delete(meal)
+    db.commit()
     
     return None
+
+
+@app.get("/api/meals/{meal_id}/photo")
+async def get_meal_photo(
+    meal_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get meal photo URL"""
+    meal = db.query(Meal).filter(
+        Meal.id == meal_id,
+        Meal.user_id == current_user["id"]
+    ).first()
+    
+    if not meal or not meal.photo_filename:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    
+    try:
+        photo_url = get_photo_url(meal.photo_filename, expires_in_seconds=3600)
+        return RedirectResponse(url=photo_url)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail="Photo not found")
