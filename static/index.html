@@ -204,7 +204,10 @@
                             <input type="url" id="meal-url" placeholder="Recipe URL (optional)" autocomplete="url">
                             <div class="photo-upload-section">
                                 <label for="meal-photo" class="photo-label">Photo (optional)</label>
-                                <input type="file" id="meal-photo" accept="image/*">
+                                <div class="photo-upload-buttons">
+                                    <input type="file" id="meal-photo" accept="image/*">
+                                    <button type="button" id="import-photo-ocr-btn" class="btn-secondary" onclick="importPhotoWithOCR()">📷 Import from Photo (OCR)</button>
+                                </div>
                                 <div id="photo-preview" class="photo-preview"></div>
                                 <button type="button" id="remove-photo-btn" class="btn-remove-photo hidden" onclick="removePhoto()">Remove Photo</button>
                             </div>

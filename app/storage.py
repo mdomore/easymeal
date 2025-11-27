@@ -3,12 +3,15 @@ from minio.error import S3Error
 import os
 from pathlib import Path
 import uuid
+from urllib.parse import urlparse
 
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "localhost:9000")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
 MINIO_BUCKET = os.getenv("MINIO_BUCKET", "photos")
 MINIO_SECURE = os.getenv("MINIO_SECURE", "false").lower() == "true"
+# External URL for presigned URLs (accessible from browser)
+MINIO_EXTERNAL_URL = os.getenv("MINIO_EXTERNAL_URL", None)
 
 # Initialize MinIO client
 minio_client = Minio(
@@ -65,6 +68,20 @@ def upload_photo(file_content: bytes, file_extension: str = ".jpg") -> str:
         raise
 
 
+def get_photo_object(filename: str):
+    """Get photo object from MinIO"""
+    try:
+        from io import BytesIO
+        response = minio_client.get_object(MINIO_BUCKET, filename)
+        data = BytesIO(response.read())
+        response.close()
+        response.release_conn()
+        return data
+    except S3Error as e:
+        print(f"Error getting photo: {e}")
+        raise
+
+
 def delete_photo(filename: str):
     """Delete photo from MinIO"""
     try:
@@ -83,6 +100,28 @@ def get_photo_url(filename: str, expires_in_seconds: int = 3600) -> str:
             filename,
             expires=timedelta(seconds=expires_in_seconds)
         )
+        
+        # Replace internal Docker hostname with external URL if configured
+        if MINIO_EXTERNAL_URL:
+            # Parse the presigned URL and replace the hostname
+            parsed = urlparse(url)
+            external_parsed = urlparse(MINIO_EXTERNAL_URL)
+            # Reconstruct URL with external hostname but keep the path and query
+            url = f"{external_parsed.scheme}://{external_parsed.netloc}{parsed.path}?{parsed.query}"
+        elif "minio:9000" in url:
+            # If no external URL configured but we see internal hostname, use localhost with http
+            url = url.replace("http://minio:9000", "http://localhost:9000")
+            url = url.replace("https://minio:9000", "http://localhost:9000")
+            # Also handle if protocol is missing
+            if url.startswith("minio:9000"):
+                url = url.replace("minio:9000", "localhost:9000")
+                if not url.startswith("http"):
+                    url = f"http://{url}"
+        
+        # Ensure http (not https) for localhost since MinIO is not using SSL
+        if "localhost:9000" in url and url.startswith("https://"):
+            url = url.replace("https://", "http://")
+        
         return url
     except S3Error as e:
         print(f"Error generating photo URL: {e}")

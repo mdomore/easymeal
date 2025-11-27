@@ -661,9 +661,31 @@ function displayMeals(meals) {
     const mealsList = document.getElementById('meals-list');
     
     if (meals.length === 0) {
-        let emptyMessage = '<p class="empty-message">No meals yet. Click "Add Meal" to create your first one!</p>';
+        let emptyMessage = `
+            <div class="empty-state">
+                <div class="empty-state-icon">📝</div>
+                <h2>No recipes yet</h2>
+                <p>Start building your recipe collection!</p>
+                <div class="empty-state-actions">
+                    <button onclick="showAddMealForm()" class="btn-primary">+ Add Recipe</button>
+                    <button onclick="importPhotoWithOCR()" class="btn-secondary">📷 Import from Photo</button>
+                </div>
+                <p class="empty-state-note">Import recipes from photos using OCR, or add them manually</p>
+            </div>
+        `;
         if (currentUser && currentUser.is_temporary) {
-            emptyMessage = '<div class="empty-message"><p><strong>Welcome to EasyMeal!</strong></p><p>You\'re using a temporary account. Start adding meals, or <a href="#" onclick="showConvertAccountModal(); return false;">create a permanent account</a> to save your recipes.</p></div>';
+            emptyMessage = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">👋</div>
+                    <h2>Welcome to EasyMeal!</h2>
+                    <p>You're using a temporary account. Start adding recipes, or create a permanent account to save them.</p>
+                    <div class="empty-state-actions">
+                        <button onclick="showAddMealForm()" class="btn-primary">+ Add Recipe</button>
+                        <button onclick="importPhotoWithOCR()" class="btn-secondary">📷 Import from Photo</button>
+                    </div>
+                    <p class="empty-state-note"><a href="#" onclick="showConvertAccountModal(); return false;">Create a permanent account</a> to save your recipes permanently</p>
+                </div>
+            `;
         }
         mealsList.innerHTML = emptyMessage;
         return;
@@ -710,6 +732,92 @@ function showAddMealForm() {
     document.getElementById('photo-preview').innerHTML = '';
     document.getElementById('remove-photo-btn').classList.add('hidden');
     document.getElementById('meal-modal').classList.remove('hidden');
+}
+
+async function importPhotoWithOCR() {
+    // Create a file input element
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        // Show loading state
+        const importBtn = document.getElementById('import-photo-ocr-btn');
+        const originalText = importBtn ? importBtn.textContent : '';
+        if (importBtn) {
+            importBtn.disabled = true;
+            importBtn.textContent = 'Processing...';
+        }
+        
+        try {
+            // Upload photo and extract text
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const response = await fetch(`${API_BASE}/meals/extract-text-from-photo`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${currentToken}`
+                },
+                body: formData
+            });
+            
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({ detail: 'Failed to process photo' }));
+                alert(error.detail || 'Failed to extract text from photo');
+                return;
+            }
+            
+            const data = await response.json();
+            
+            // Open the meal form and populate it
+            showAddMealForm();
+            
+            // Set the photo preview
+            const photoPreview = document.getElementById('photo-preview');
+            const photoUrl = URL.createObjectURL(file);
+            photoPreview.innerHTML = `<img src="${photoUrl}" alt="Uploaded photo" class="preview-image">`;
+            document.getElementById('remove-photo-btn').classList.remove('hidden');
+            
+            // Store the filename from OCR upload - it's already uploaded
+            originalMealPhoto = data.filename;
+            
+            // Also set the file input so the preview works
+            const photoInput = document.getElementById('meal-photo');
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            photoInput.files = dataTransfer.files;
+            
+            // Populate description with extracted text
+            if (data.extracted_text && data.extracted_text.trim()) {
+                document.getElementById('meal-description').value = data.extracted_text.trim();
+            } else {
+                alert('No text could be extracted from the photo. You can still add the recipe manually.');
+            }
+            
+            // Try to extract a name from the first line
+            if (data.extracted_text) {
+                const firstLine = data.extracted_text.split('\n')[0].trim();
+                if (firstLine && firstLine.length < 100) {
+                    document.getElementById('meal-name').value = firstLine;
+                }
+            }
+            
+        } catch (error) {
+            console.error('OCR import error:', error);
+            alert('Failed to process photo. Please try again.');
+        } finally {
+            if (importBtn) {
+                importBtn.disabled = false;
+                importBtn.textContent = originalText;
+            }
+        }
+    };
+    
+    input.click();
 }
 
 function editMeal(mealId) {
@@ -871,8 +979,13 @@ async function saveMeal(event) {
         let photoFilename = null;
         let shouldUpdatePhoto = false;
         
-        // Upload photo if a new file is selected
-        if (photoFile) {
+        // Check if photo was imported via OCR (already uploaded)
+        if (originalMealPhoto && !editingMealId) {
+            // Photo was imported via OCR, use the filename from OCR response
+            photoFilename = originalMealPhoto;
+            shouldUpdatePhoto = true;
+        } else if (photoFile) {
+            // Upload photo if a new file is selected (not from OCR)
             const formData = new FormData();
             formData.append('file', photoFile);
             

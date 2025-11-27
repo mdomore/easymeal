@@ -48,6 +48,7 @@ services:
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - MINIO_BUCKET=photos
+      - MINIO_EXTERNAL_URL=${MINIO_EXTERNAL_URL:-http://localhost:9000}
       - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
     depends_on:
       postgres:

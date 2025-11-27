@@ -818,6 +818,61 @@ header h1 {
     color: var(--text-primary);
 }
 
+.empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.empty-state-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+}
+
+.empty-state h2 {
+    font-size: 24px;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+
+.empty-state p {
+    color: var(--text-secondary);
+    margin-bottom: 30px;
+    font-size: 16px;
+}
+
+.empty-state-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.empty-state-note {
+    font-size: 14px;
+    color: var(--text-tertiary);
+    margin-top: 20px;
+}
+
+.empty-state-note a {
+    color: var(--accent-color);
+    text-decoration: underline;
+}
+
+.photo-upload-buttons {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.photo-upload-buttons input[type="file"] {
+    flex: 1;
+    min-width: 200px;
+}
+
 .meal-card {
     background: var(--bg-secondary);
     border-radius: 12px;

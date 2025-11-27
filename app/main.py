@@ -12,9 +12,12 @@ import bcrypt
 from pathlib import Path
 from sqlalchemy.orm import Session
 import uuid
+from io import BytesIO
+import pytesseract
+from PIL import Image
 
 from app.database import get_db, init_db, User, Meal
-from app.storage import upload_photo, delete_photo, get_photo_url, ensure_bucket_exists
+from app.storage import upload_photo, delete_photo, get_photo_url, get_photo_object, ensure_bucket_exists
 
 app = FastAPI(title="EasyMeal Recipe App", version="1.0.0", root_path="/easymeal")
 
@@ -85,6 +88,7 @@ class MealCreate(BaseModel):
     name: str
     description: Optional[str] = None
     url: Optional[str] = None
+    photo_filename: Optional[str] = None
 
 
 class MealUpdate(BaseModel):
@@ -195,14 +199,38 @@ async def startup_event():
         print(f"Warning: Could not initialize MinIO bucket: {e}")
 
 
-# Serve photos from MinIO via redirect
+# Serve photos from MinIO directly
 @app.get("/static/photos/{filename}")
 async def serve_photo(filename: str):
-    """Redirect to MinIO presigned URL for photo"""
+    """Serve photo directly from MinIO"""
     try:
-        photo_url = get_photo_url(filename, expires_in_seconds=3600)
-        return RedirectResponse(url=photo_url)
+        from fastapi.responses import StreamingResponse
+        from io import BytesIO
+        
+        # Get photo from MinIO
+        photo_data = get_photo_object(filename)
+        
+        # Determine content type from filename
+        content_type = "image/jpeg"
+        if filename.lower().endswith('.png'):
+            content_type = "image/png"
+        elif filename.lower().endswith('.gif'):
+            content_type = "image/gif"
+        elif filename.lower().endswith('.webp'):
+            content_type = "image/webp"
+        
+        # Reset stream position
+        photo_data.seek(0)
+        
+        return StreamingResponse(
+            photo_data,
+            media_type=content_type,
+            headers={
+                "Cache-Control": "public, max-age=3600"
+            }
+        )
     except Exception as e:
+        print(f"Error serving photo: {e}")
         raise HTTPException(status_code=404, detail="Photo not found")
 
 
@@ -210,7 +238,14 @@ async def serve_photo(filename: str):
 @app.get("/static/sw.js")
 async def serve_service_worker():
     """Serve service worker with correct content type"""
-    return FileResponse("static/sw.js", media_type="application/javascript")
+    from fastapi.responses import Response
+    with open("static/sw.js", "r") as f:
+        content = f.read()
+    return Response(
+        content=content,
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/easymeal/"}
+    )
 
 # Serve manifest.json
 @app.get("/static/manifest.json")
@@ -411,7 +446,7 @@ async def create_meal(
         name=meal.name,
         description=meal.description,
         url=meal.url,
-        photo_filename=None,
+        photo_filename=meal.photo_filename,
         user_id=current_user["id"]
     )
     
@@ -493,6 +528,51 @@ async def upload_photo_endpoint(
         return {"filename": filename}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to upload photo: {str(e)}")
+
+
+@app.post("/api/meals/extract-text-from-photo")
+async def extract_text_from_photo(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Extract text from a photo using OCR and upload the photo"""
+    # Validate file type
+    if not file.content_type or not file.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    # Check file size
+    file_content = await file.read()
+    if len(file_content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413, 
+            detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024 * 1024)}MB"
+        )
+    
+    try:
+        # Open image with PIL
+        image = Image.open(BytesIO(file_content))
+        
+        # Extract text using OCR
+        extracted_text = pytesseract.image_to_string(image)
+        
+        # Clean up the text (remove extra whitespace)
+        extracted_text = extracted_text.strip()
+        
+        # Upload photo to MinIO
+        file_ext = Path(file.filename).suffix if file.filename else '.jpg'
+        if not file_ext:
+            file_ext = '.jpg'
+        filename = upload_photo(file_content, file_ext)
+        
+        return {
+            "filename": filename,
+            "extracted_text": extracted_text
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to process photo: {str(e)}"
+        )
 
 
 @app.delete("/api/meals/{meal_id}", status_code=204)
