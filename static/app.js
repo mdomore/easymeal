@@ -707,17 +707,23 @@ function displayMeals(meals) {
     });
     
     mealsList.innerHTML = sortedMeals.map(meal => {
+        const hasPhoto = meal.photo_filename;
+        const photoUrl = hasPhoto ? `static/photos/${escapeHtml(meal.photo_filename)}` : '';
+        const description = meal.description ? escapeHtml(meal.description).substring(0, 100) + (meal.description.length > 100 ? '...' : '') : '';
+        
         return `
         <div class="meal-card" onclick="showMealDetails(${meal.id})">
-            <div class="meal-card-header">
-                <h3>${escapeHtml(meal.name)}</h3>
-                <div class="meal-menu" onclick="event.stopPropagation()">
-                    <button class="meal-menu-btn" onclick="toggleMealMenu(${meal.id})">⋯</button>
-                    <div id="menu-${meal.id}" class="meal-menu-dropdown hidden" onclick="event.stopPropagation()">
-                        <button onclick="editMeal(${meal.id})">Edit</button>
-                        <button onclick="deleteMeal(${meal.id})" class="delete-option">Delete</button>
-                    </div>
+            ${hasPhoto ? `<div class="meal-card-image"><img src="${photoUrl}" alt="${escapeHtml(meal.name)}"></div>` : '<div class="meal-card-image-placeholder"><span class="placeholder-icon">🍽️</span></div>'}
+            <div class="meal-menu-overlay" onclick="event.stopPropagation()">
+                <button class="meal-menu-btn" onclick="toggleMealMenu(${meal.id})">⋯</button>
+                <div id="menu-${meal.id}" class="meal-menu-dropdown hidden" onclick="event.stopPropagation()">
+                    <button onclick="editMeal(${meal.id})">Edit</button>
+                    <button onclick="deleteMeal(${meal.id})" class="delete-option">Delete</button>
                 </div>
+            </div>
+            <div class="meal-card-content">
+                <h3>${escapeHtml(meal.name)}</h3>
+                ${description ? `<p class="meal-card-description">${description}</p>` : ''}
             </div>
         </div>
     `;
