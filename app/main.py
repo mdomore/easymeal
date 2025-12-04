@@ -13,7 +13,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 import uuid
 from io import BytesIO
-import pytesseract
+import easyocr
 from PIL import Image
 
 from app.database import get_db, init_db, User, Meal
@@ -121,9 +121,40 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 
+# Helper function to create default recipes for new users
+def create_default_recipes(db: Session, user_id: int):
+    """Create standard recipes for new temporary accounts"""
+    default_recipes = [
+        {
+            "name": "Classic Chocolate Chip Cookies",
+            "description": "Ingredients:\n- 2 1/4 cups all-purpose flour\n- 1 tsp baking soda\n- 1 tsp salt\n- 1 cup butter, softened\n- 3/4 cup granulated sugar\n- 3/4 cup brown sugar\n- 2 large eggs\n- 2 tsp vanilla extract\n- 2 cups chocolate chips\n\nInstructions:\n1. Preheat oven to 375°F (190°C)\n2. Mix flour, baking soda, and salt in a bowl\n3. Beat butter, sugars, eggs, and vanilla in another bowl\n4. Gradually blend in flour mixture\n5. Stir in chocolate chips\n6. Drop rounded tablespoons onto ungreased cookie sheets\n7. Bake 9-11 minutes until golden brown",
+        },
+        {
+            "name": "Spaghetti Carbonara",
+            "description": "Ingredients:\n- 1 lb spaghetti\n- 8 oz pancetta or bacon, diced\n- 3 large eggs\n- 1 cup grated Parmesan cheese\n- 2 cloves garlic, minced\n- Fresh black pepper\n- Salt\n\nInstructions:\n1. Cook spaghetti according to package directions\n2. While pasta cooks, fry pancetta until crisp\n3. In a bowl, whisk eggs and Parmesan\n4. Drain pasta, reserving 1/2 cup pasta water\n5. Immediately toss hot pasta with pancetta\n6. Remove from heat and quickly mix in egg mixture\n7. Add pasta water as needed for creaminess\n8. Season with pepper and serve immediately",
+        },
+        {
+            "name": "Fresh Garden Salad",
+            "description": "Ingredients:\n- Mixed greens (romaine, arugula, spinach)\n- 1 cucumber, sliced\n- 2 tomatoes, diced\n- 1/2 red onion, thinly sliced\n- 1/4 cup feta cheese\n- 2 tbsp olive oil\n- 1 tbsp lemon juice\n- Salt and pepper to taste\n\nInstructions:\n1. Wash and dry all greens\n2. Combine greens, cucumber, tomatoes, and onion in a large bowl\n3. Whisk together olive oil, lemon juice, salt, and pepper\n4. Toss salad with dressing\n5. Top with crumbled feta cheese\n6. Serve immediately",
+        },
+    ]
+    
+    for recipe in default_recipes:
+        new_meal = Meal(
+            name=recipe["name"],
+            description=recipe["description"],
+            url=None,
+            photo_filename=None,
+            user_id=user_id
+        )
+        db.add(new_meal)
+    
+    db.commit()
+
+
 # Helper function to create temporary account
 def create_temporary_account(db: Session) -> User:
-    """Create a new temporary account"""
+    """Create a new temporary account with default recipes"""
     temp_user = User(
         username=None,
         email=None,
@@ -134,6 +165,10 @@ def create_temporary_account(db: Session) -> User:
     db.add(temp_user)
     db.commit()
     db.refresh(temp_user)
+    
+    # Add default recipes for new users
+    create_default_recipes(db, temp_user.id)
+    
     return temp_user
 
 
@@ -189,6 +224,19 @@ async def get_current_user(
         raise credentials_exception
 
 
+# Initialize EasyOCR reader (load models once at startup)
+ocr_reader = None
+
+def get_ocr_reader():
+    """Get or initialize EasyOCR reader"""
+    global ocr_reader
+    if ocr_reader is None:
+        print("Initializing EasyOCR reader (this may take a moment on first use)...")
+        # Initialize with English and French support (can add more languages)
+        ocr_reader = easyocr.Reader(['en', 'fr'], gpu=False)
+        print("EasyOCR reader initialized")
+    return ocr_reader
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize database and MinIO bucket on startup"""
@@ -197,6 +245,7 @@ async def startup_event():
         ensure_bucket_exists()
     except Exception as e:
         print(f"Warning: Could not initialize MinIO bucket: {e}")
+    # Note: OCR reader will be initialized lazily on first use to avoid slow startup
 
 
 # Serve photos from MinIO directly
@@ -549,11 +598,20 @@ async def extract_text_from_photo(
         )
     
     try:
-        # Open image with PIL
-        image = Image.open(BytesIO(file_content))
+        # Get OCR reader
+        reader = get_ocr_reader()
         
-        # Extract text using OCR
-        extracted_text = pytesseract.image_to_string(image)
+        # Read image with EasyOCR
+        # EasyOCR works with numpy arrays, so we'll use PIL to convert
+        image = Image.open(BytesIO(file_content))
+        import numpy as np
+        image_array = np.array(image)
+        
+        # Extract text using EasyOCR
+        results = reader.readtext(image_array)
+        
+        # Combine all detected text
+        extracted_text = "\n".join([result[1] for result in results])
         
         # Clean up the text (remove extra whitespace)
         extracted_text = extracted_text.strip()

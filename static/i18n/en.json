@@ -1,0 +1,98 @@
+{
+  "meta": {
+    "title": "EasyMeal - Recipe Manager",
+    "description": "Your personal recipe collection. No ads. No clutter."
+  },
+  "landing": {
+    "signIn": "Sign in",
+    "tryEasyMeal": "Try EasyMeal",
+    "heroTitle": "Your personal recipe collection.\nNo ads. No clutter.",
+    "heroSubtitle": "Organize recipes from any source. Access them anywhere. Keep it simple.",
+    "tryFree": "Try EasyMeal free",
+    "installApp": "Install App",
+    "noCreditCard": "No credit card required • Start in seconds",
+    "feature1Title": "From Any Source",
+    "feature1Desc": "Import recipes from URLs, photos, text, or books. All in one place.",
+    "feature2Title": "Always Accessible",
+    "feature2Desc": "Access your recipes from any device.",
+    "feature3Title": "Clean & Simple",
+    "feature3Desc": "No ads, no distractions. Just your recipes, beautifully organized."
+  },
+  "auth": {
+    "signInTitle": "Sign in to EasyMeal",
+    "signIn": "Sign in",
+    "createAccount": "Create account",
+    "username": "Username",
+    "password": "Password",
+    "email": "Email"
+  },
+  "meals": {
+    "appName": "EasyMeal",
+    "logout": "Logout",
+    "searchPlaceholder": "Search recipes...",
+    "sortAlphabetically": "Sort alphabetically",
+    "addMeal": "+ Add Recipe",
+    "welcome": "Welcome to EasyMeal!",
+    "tempAccountMessage": "You're using a temporary account. Start adding recipes, or create a permanent account to save them.",
+    "noRecipesYet": "No recipes yet",
+    "startBuilding": "Start building your recipe collection!",
+    "addRecipe": "+ Add Recipe",
+    "importFromPhoto": "📷 Import from Photo",
+    "createPermanentAccount": "Create a permanent account",
+    "createPermanentAccountSuffix": "to save your recipes permanently",
+    "importRecipesNote": "Import recipes from photos using OCR, or add them manually"
+  },
+  "modals": {
+    "convertAccountTitle": "Create Permanent Account",
+    "convertAccountDesc": "Convert your temporary account to save your recipes permanently and access them from any device.",
+    "cancel": "Cancel",
+    "createAccount": "Create Account",
+    "deleteMeal": "Delete Recipe",
+    "deleteConfirm": "Are you sure you want to delete this recipe? This action cannot be undone.",
+    "delete": "Delete",
+    "addMeal": "Add Recipe",
+    "editMeal": "Edit Recipe",
+    "mealName": "Recipe name",
+    "descriptionOptional": "Description (optional)",
+    "recipeUrlOptional": "Recipe URL (optional)",
+    "photoOptional": "Photo (optional)",
+    "importPhotoOCR": "📷 Import from Photo (OCR)",
+    "removePhoto": "Remove Photo",
+    "save": "Save",
+    "close": "Close",
+    "photo": "Photo",
+    "description": "Description",
+    "recipeLink": "Recipe Link",
+    "created": "Created"
+  },
+  "messages": {
+    "accountConverted": "Account converted successfully! Your recipes are now saved permanently.",
+    "fillAllFields": "Please fill in all fields",
+    "failedToStart": "Failed to start. Please try again.",
+    "networkError": "Network error. Please try again.",
+    "failedExtractText": "Failed to extract text from photo",
+    "noTextExtracted": "No text could be extracted from the photo. You can still add the recipe manually.",
+    "failedProcessPhoto": "Failed to process photo. Please try again.",
+    "failedLoadMeal": "Failed to load recipe",
+    "failedUploadPhoto": "Failed to upload photo",
+    "savedOffline": "Recipe saved.",
+    "failedSaveMeal": "Failed to save recipe",
+    "deletedOffline": "Recipe deleted.",
+    "failedDeleteMeal": "Failed to delete recipe"
+  },
+  "errors": {
+    "usernameTaken": "Username already registered",
+    "emailTaken": "Email already registered",
+    "incorrectCredentials": "Incorrect username or password",
+    "tempAccountCannotLogin": "Temporary accounts cannot login. Please convert your account first.",
+    "couldNotValidate": "Could not validate credentials",
+    "mealNotFound": "Recipe not found",
+    "photoNotFound": "Photo not found",
+    "accountNotTemporary": "Account is not temporary or does not exist",
+    "usernameAlreadyTaken": "Username already taken"
+  },
+  "common": {
+    "toggleDarkMode": "Toggle dark mode"
+  }
+}
+

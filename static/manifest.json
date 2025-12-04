@@ -39,7 +39,7 @@
   "screenshots": [],
   "shortcuts": [
     {
-      "name": "Add Meal",
+      "name": "Add Recipe",
       "short_name": "Add",
       "description": "Quickly add a new recipe",
       "url": "/easymeal/?action=add",

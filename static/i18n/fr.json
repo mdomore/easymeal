@@ -1,0 +1,98 @@
+{
+  "meta": {
+    "title": "EasyMeal - Gestionnaire de Recettes",
+    "description": "Votre collection personnelle de recettes. Sans publicité. Juste vos recettes."
+  },
+  "landing": {
+    "signIn": "Se connecter",
+    "tryEasyMeal": "Essayer EasyMeal",
+    "heroTitle": "Votre collection personnelle de recettes.\nSans publicité. Juste vos recettes.",
+    "heroSubtitle": "Organisez des recettes de n'importe quelle source. Accédez-y partout. Simplement.",
+    "tryFree": "Essayer EasyMeal gratuitement",
+    "installApp": "Installer l'application",
+    "noCreditCard": "Aucune carte de crédit requise • Commencez en quelques secondes",
+    "feature1Title": "Depuis N'importe Quelle Source",
+    "feature1Desc": "Importez des recettes depuis des URLs, des photos, du texte ou des livres. Tout au même endroit.",
+    "feature2Title": "Toujours Accessible",
+    "feature2Desc": "Accédez à vos recettes depuis n'importe quel appareil.",
+    "feature3Title": "Propre et Simple",
+    "feature3Desc": "Pas de publicité, pas de distractions. Juste vos recettes, magnifiquement organisées."
+  },
+  "auth": {
+    "signInTitle": "Se connecter à EasyMeal",
+    "signIn": "Se connecter",
+    "createAccount": "Créer un compte",
+    "username": "Nom d'utilisateur",
+    "password": "Mot de passe",
+    "email": "E-mail"
+  },
+  "meals": {
+    "appName": "EasyMeal",
+    "logout": "Déconnexion",
+    "searchPlaceholder": "Rechercher des recettes...",
+    "sortAlphabetically": "Trier par ordre alphabétique",
+    "addMeal": "+ Ajouter une Recette",
+    "welcome": "Bienvenue sur EasyMeal !",
+    "tempAccountMessage": "Vous utilisez un compte temporaire. Commencez à ajouter des recettes, ou créez un compte permanent pour les sauvegarder.",
+    "noRecipesYet": "Aucune recette pour le moment",
+    "startBuilding": "Commencez à construire votre collection de recettes !",
+    "addRecipe": "+ Ajouter une Recette",
+    "importFromPhoto": "📷 Importer depuis une Photo",
+    "createPermanentAccount": "Créez un compte permanent",
+    "createPermanentAccountSuffix": "pour sauvegarder vos recettes définitivement",
+    "importRecipesNote": "Importez des recettes depuis des photos en utilisant l'OCR, ou ajoutez-les manuellement"
+  },
+  "modals": {
+    "convertAccountTitle": "Créer un Compte Permanent",
+    "convertAccountDesc": "Convertissez votre compte temporaire pour sauvegarder vos recettes définitivement et y accéder depuis n'importe quel appareil.",
+    "cancel": "Annuler",
+    "createAccount": "Créer un Compte",
+    "deleteMeal": "Supprimer la Recette",
+    "deleteConfirm": "Êtes-vous sûr de vouloir supprimer cette recette ? Cette action ne peut pas être annulée.",
+    "delete": "Supprimer",
+    "addMeal": "Ajouter une Recette",
+    "editMeal": "Modifier la Recette",
+    "mealName": "Nom de la recette",
+    "descriptionOptional": "Description (facultatif)",
+    "recipeUrlOptional": "URL de la recette (facultatif)",
+    "photoOptional": "Photo (facultatif)",
+    "importPhotoOCR": "📷 Importer depuis une Photo (OCR)",
+    "removePhoto": "Supprimer la Photo",
+    "save": "Enregistrer",
+    "close": "Fermer",
+    "photo": "Photo",
+    "description": "Description",
+    "recipeLink": "Lien de la Recette",
+    "created": "Créé"
+  },
+  "messages": {
+    "accountConverted": "Compte converti avec succès ! Vos recettes sont maintenant sauvegardées définitivement.",
+    "fillAllFields": "Veuillez remplir tous les champs",
+    "failedToStart": "Échec du démarrage. Veuillez réessayer.",
+    "networkError": "Erreur réseau. Veuillez réessayer.",
+    "failedExtractText": "Échec de l'extraction du texte de la photo",
+    "noTextExtracted": "Aucun texte n'a pu être extrait de la photo. Vous pouvez toujours ajouter la recette manuellement.",
+    "failedProcessPhoto": "Échec du traitement de la photo. Veuillez réessayer.",
+    "failedLoadMeal": "Échec du chargement de la recette",
+    "failedUploadPhoto": "Échec du téléchargement de la photo",
+    "savedOffline": "Recette sauvegardée.",
+    "failedSaveMeal": "Échec de la sauvegarde de la recette",
+    "deletedOffline": "Recette supprimée.",
+    "failedDeleteMeal": "Échec de la suppression de la recette"
+  },
+  "errors": {
+    "usernameTaken": "Le nom d'utilisateur est déjà enregistré",
+    "emailTaken": "L'e-mail est déjà enregistré",
+    "incorrectCredentials": "Nom d'utilisateur ou mot de passe incorrect",
+    "tempAccountCannotLogin": "Les comptes temporaires ne peuvent pas se connecter. Veuillez d'abord convertir votre compte.",
+    "couldNotValidate": "Impossible de valider les identifiants",
+    "mealNotFound": "Recette non trouvée",
+    "photoNotFound": "Photo non trouvée",
+    "accountNotTemporary": "Le compte n'est pas temporaire ou n'existe pas",
+    "usernameAlreadyTaken": "Le nom d'utilisateur est déjà pris"
+  },
+  "common": {
+    "toggleDarkMode": "Basculer le mode sombre"
+  }
+}
+

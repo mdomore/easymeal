@@ -99,6 +99,17 @@ window.addEventListener('DOMContentLoaded', async () => {
     
     // Show install prompt if available
     setupInstallPrompt();
+    
+    // Listen for language changes and update dynamic content
+    window.addEventListener('languageChanged', () => {
+        // If meals view is currently visible, re-render it to update translations
+        const mealsView = document.getElementById('meals-view');
+        if (mealsView && !mealsView.classList.contains('hidden')) {
+            // Re-display meals to update all dynamic content (including welcome message)
+            // filterAndDisplayMeals handles both cases: with meals and empty state
+            filterAndDisplayMeals();
+        }
+    });
 });
 
 // Landing page functions
@@ -129,7 +140,7 @@ async function createTempAccount() {
             await checkAuth();
         } else {
             console.error('Failed to create temporary account');
-            alert('Failed to start. Please try again.');
+            alert(window.t ? window.t('messages.failedToStart') : 'Failed to start. Please try again.');
         }
     } catch (error) {
         console.error('Error creating temporary account:', error);
@@ -190,11 +201,6 @@ async function checkAuth() {
         if (response.ok) {
             currentUser = await response.json();
             console.log('Auth successful, user:', currentUser);
-            
-            // Show conversion prompt for temporary accounts
-            if (currentUser.is_temporary) {
-                showTempAccountPrompt();
-            }
             
             showMealsView();
         } else {
@@ -396,7 +402,7 @@ async function convertAccount(event) {
             closeConvertModal();
             
             // Show success message
-            alert('Account converted successfully! Your recipes are now saved permanently.');
+            alert(window.t ? window.t('messages.accountConverted') : 'Account converted successfully! Your recipes are now saved permanently.');
         } else {
             const errorData = await response.json().catch(() => ({ detail: 'Conversion failed' }));
             errorDiv.textContent = errorData.detail || 'Conversion failed';
@@ -559,7 +565,7 @@ async function deleteMealOffline(mealId) {
         }
     });
     
-    if (!response.ok) throw new Error('Failed to delete meal');
+    if (!response.ok) throw new Error('Failed to delete recipe');
 }
 
 // Cache meals in IndexedDB
@@ -661,29 +667,27 @@ function displayMeals(meals) {
     const mealsList = document.getElementById('meals-list');
     
     if (meals.length === 0) {
-        let emptyMessage = `
-            <div class="empty-state">
-                <div class="empty-state-icon">📝</div>
-                <h2>No recipes yet</h2>
-                <p>Start building your recipe collection!</p>
-                <div class="empty-state-actions">
-                    <button onclick="showAddMealForm()" class="btn-primary">+ Add Recipe</button>
-                    <button onclick="importPhotoWithOCR()" class="btn-secondary">📷 Import from Photo</button>
+            let emptyMessage = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">📝</div>
+                    <h2>${window.t ? window.t('meals.noRecipesYet') : 'No recipes yet'}</h2>
+                    <p>${window.t ? window.t('meals.startBuilding') : 'Start building your recipe collection!'}</p>
+                    <div class="empty-state-actions">
+                        <button onclick="showAddMealForm()" class="btn-primary">${window.t ? window.t('meals.addRecipe') : '+ Add Recipe'}</button>
+                        <button onclick="importPhotoWithOCR()" class="btn-secondary">${window.t ? window.t('meals.importFromPhoto') : '📷 Import from Photo'}</button>
+                    </div>
+                    <p class="empty-state-note">${window.t ? window.t('meals.importRecipesNote') : 'Import recipes from photos using OCR, or add them manually'}</p>
                 </div>
-                <p class="empty-state-note">Import recipes from photos using OCR, or add them manually</p>
-            </div>
-        `;
+            `;
         if (currentUser && currentUser.is_temporary) {
             emptyMessage = `
                 <div class="empty-state">
-                    <div class="empty-state-icon">👋</div>
-                    <h2>Welcome to EasyMeal!</h2>
-                    <p>You're using a temporary account. Start adding recipes, or create a permanent account to save them.</p>
+                    <h2>${window.t ? window.t('meals.welcome') : 'Welcome to EasyMeal!'}</h2>
+                    <p>${window.t ? window.t('meals.tempAccountMessage') : 'You\'re using a temporary account. Start adding recipes, or create a permanent account to save them.'}</p>
                     <div class="empty-state-actions">
-                        <button onclick="showAddMealForm()" class="btn-primary">+ Add Recipe</button>
-                        <button onclick="importPhotoWithOCR()" class="btn-secondary">📷 Import from Photo</button>
+                        <button onclick="showAddMealForm()" class="btn-primary">${window.t ? window.t('meals.addRecipe') : '+ Add Recipe'}</button>
                     </div>
-                    <p class="empty-state-note"><a href="#" onclick="showConvertAccountModal(); return false;">Create a permanent account</a> to save your recipes permanently</p>
+                    <p class="empty-state-note"><a href="#" onclick="showConvertAccountModal(); return false;">${window.t ? window.t('meals.createPermanentAccount') : 'Create a permanent account'}</a> ${window.t ? window.t('meals.createPermanentAccountSuffix') : 'to save your recipes permanently'}</p>
                 </div>
             `;
         }
@@ -724,7 +728,7 @@ function showAddMealForm() {
     editingMealId = null;
     originalMealPhoto = null;
     photoRemoved = false;
-    document.getElementById('modal-title').textContent = 'Add Meal';
+    document.getElementById('modal-title').textContent = window.t ? window.t('modals.addMeal') : 'Add Recipe';
     document.getElementById('meal-name').value = '';
     document.getElementById('meal-description').value = '';
     document.getElementById('meal-url').value = '';
@@ -795,7 +799,7 @@ async function importPhotoWithOCR() {
             if (data.extracted_text && data.extracted_text.trim()) {
                 document.getElementById('meal-description').value = data.extracted_text.trim();
             } else {
-                alert('No text could be extracted from the photo. You can still add the recipe manually.');
+                alert(window.t ? window.t('messages.noTextExtracted') : 'No text could be extracted from the photo. You can still add the recipe manually.');
             }
             
             // Try to extract a name from the first line
@@ -828,7 +832,7 @@ function editMeal(mealId) {
     });
     
     editingMealId = mealId;
-    document.getElementById('modal-title').textContent = 'Edit Meal';
+    document.getElementById('modal-title').textContent = window.t ? window.t('modals.editMeal') : 'Edit Recipe';
     
     fetch(`${API_BASE}/meals/${mealId}`, {
         headers: {
@@ -1151,10 +1155,10 @@ async function confirmDelete() {
             loadMeals(); // Reload all meals from server
         } else {
             const error = await response.json();
-            alert(error.detail || 'Failed to delete meal');
+            alert(error.detail || (window.t ? window.t('messages.failedDeleteMeal') : 'Failed to delete recipe'));
         }
     } catch (error) {
-        console.error('Delete meal error:', error);
+        console.error('Delete recipe error:', error);
         if (!isOnline) {
             offlineQueue.push({
                 type: 'delete',
