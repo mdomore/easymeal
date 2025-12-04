@@ -6,6 +6,36 @@ let sortOrder = 'asc'; // 'asc' or 'desc'
 let allMeals = []; // Store all meals for filtering
 let originalMealPhoto = null; // Track original photo when editing starts
 let photoRemoved = false; // Track if photo was explicitly removed
+let quillEditor = null; // Quill editor instance
+
+// Helper function to strip HTML tags for preview
+function stripHtml(html) {
+    if (!html) return '';
+    const tmp = document.createElement('DIV');
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || '';
+}
+
+// Initialize Quill editor
+function initQuillEditor() {
+    if (quillEditor) {
+        return; // Already initialized
+    }
+    
+    quillEditor = new Quill('#quill-editor', {
+        theme: 'snow',
+        modules: {
+            toolbar: [
+                [{ 'header': [1, 2, 3, false] }],
+                ['bold', 'italic', 'underline'],
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                ['link'],
+                ['clean']
+            ]
+        },
+        placeholder: window.t ? window.t('modals.descriptionOptional') : 'Description (optional)'
+    });
+}
 
 // Dark mode functions
 function initDarkMode() {
@@ -709,7 +739,9 @@ function displayMeals(meals) {
     mealsList.innerHTML = sortedMeals.map(meal => {
         const hasPhoto = meal.photo_filename;
         const photoUrl = hasPhoto ? `static/photos/${escapeHtml(meal.photo_filename)}` : '';
-        const description = meal.description ? escapeHtml(meal.description).substring(0, 100) + (meal.description.length > 100 ? '...' : '') : '';
+        // Strip HTML tags for card preview
+        const plainDescription = meal.description ? stripHtml(meal.description) : '';
+        const description = plainDescription ? (plainDescription.substring(0, 100) + (plainDescription.length > 100 ? '...' : '')) : '';
         
         return `
         <div class="meal-card" onclick="showMealDetails(${meal.id})">
@@ -736,11 +768,15 @@ function showAddMealForm() {
     photoRemoved = false;
     document.getElementById('modal-title').textContent = window.t ? window.t('modals.addMeal') : 'Add Recipe';
     document.getElementById('meal-name').value = '';
-    document.getElementById('meal-description').value = '';
     document.getElementById('meal-url').value = '';
     document.getElementById('meal-photo').value = '';
     document.getElementById('photo-preview').innerHTML = '';
     document.getElementById('remove-photo-btn').classList.add('hidden');
+    
+    // Initialize Quill editor if not already done
+    initQuillEditor();
+    quillEditor.setContents([]); // Clear editor content
+    
     document.getElementById('meal-modal').classList.remove('hidden');
 }
 
@@ -803,7 +839,10 @@ async function importPhotoWithOCR() {
             
             // Populate description with extracted text
             if (data.extracted_text && data.extracted_text.trim()) {
-                document.getElementById('meal-description').value = data.extracted_text.trim();
+                initQuillEditor();
+                // Insert text as plain text, preserving line breaks
+                const text = data.extracted_text.trim();
+                quillEditor.setText(text);
             } else {
                 alert(window.t ? window.t('messages.noTextExtracted') : 'No text could be extracted from the photo. You can still add the recipe manually.');
             }
@@ -848,9 +887,20 @@ function editMeal(mealId) {
     .then(response => response.json())
     .then(meal => {
         document.getElementById('meal-name').value = meal.name;
-        document.getElementById('meal-description').value = meal.description || '';
         document.getElementById('meal-url').value = meal.url || '';
         document.getElementById('meal-photo').value = '';
+        
+        // Initialize Quill editor if not already done
+        initQuillEditor();
+        
+        // Load description into Quill editor
+        if (meal.description) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = meal.description;
+            quillEditor.root.innerHTML = tempDiv.innerHTML;
+        } else {
+            quillEditor.setContents([]);
+        }
         
         // Track original photo and show existing photo if any
         originalMealPhoto = meal.photo_filename || null;
@@ -961,7 +1011,9 @@ function showMealDetails(mealId) {
         }
         
         document.getElementById('detail-name').textContent = meal.name;
-        document.getElementById('detail-description').textContent = meal.description || 'No description';
+        // Display HTML content from description
+        const descriptionHtml = meal.description || '<p>No description</p>';
+        document.getElementById('detail-description').innerHTML = descriptionHtml;
         document.getElementById('detail-url').innerHTML = urlLink;
         document.getElementById('detail-date').textContent = new Date(meal.created_at).toLocaleString();
         document.getElementById('detail-modal').classList.remove('hidden');
@@ -980,7 +1032,9 @@ async function saveMeal(event) {
     event.preventDefault();
     
     const name = document.getElementById('meal-name').value;
-    const description = document.getElementById('meal-description').value;
+    // Get HTML content from Quill editor
+    initQuillEditor(); // Ensure editor is initialized
+    const description = quillEditor.root.innerHTML.trim() || null;
     const mealUrl = document.getElementById('meal-url').value.trim();
     const photoFile = document.getElementById('meal-photo').files[0];
     const photoPreview = document.getElementById('photo-preview');

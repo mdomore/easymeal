@@ -1131,6 +1131,69 @@ header h1 {
     transition: color 0.3s ease;
 }
 
+.formatted-description {
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.formatted-description p {
+    margin-bottom: 12px;
+}
+
+.formatted-description p:last-child {
+    margin-bottom: 0;
+}
+
+.formatted-description h1,
+.formatted-description h2,
+.formatted-description h3 {
+    color: var(--text-primary);
+    font-weight: 600;
+    margin-top: 20px;
+    margin-bottom: 12px;
+}
+
+.formatted-description h1 {
+    font-size: 1.5em;
+}
+
+.formatted-description h2 {
+    font-size: 1.3em;
+}
+
+.formatted-description h3 {
+    font-size: 1.1em;
+}
+
+.formatted-description ul,
+.formatted-description ol {
+    margin: 12px 0;
+    padding-left: 24px;
+    color: var(--text-secondary);
+}
+
+.formatted-description li {
+    margin-bottom: 6px;
+}
+
+.formatted-description strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.formatted-description em {
+    font-style: italic;
+}
+
+.formatted-description a {
+    color: var(--accent-color);
+    text-decoration: none;
+}
+
+.formatted-description a:hover {
+    text-decoration: underline;
+}
+
 .detail-url {
     display: inline-block;
     color: var(--accent-color);
@@ -1211,6 +1274,14 @@ header h1 {
     gap: 15px;
 }
 
+#meal-form label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+    font-weight: 500;
+    font-size: 14px;
+}
+
 #meal-form input[type="text"],
 #meal-form input[type="url"],
 #meal-form textarea {
@@ -1238,6 +1309,87 @@ header h1 {
 #meal-form textarea {
     min-height: 100px;
     resize: vertical;
+}
+
+/* Quill Editor Styling */
+#quill-editor {
+    min-height: 200px;
+    margin-bottom: 15px;
+}
+
+#quill-editor .ql-container {
+    font-family: inherit;
+    font-size: 16px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+#quill-editor .ql-editor {
+    min-height: 200px;
+    padding: 12px 16px;
+}
+
+#quill-editor .ql-editor.ql-blank::before {
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+
+#quill-editor .ql-toolbar {
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border-color);
+    border-bottom: none;
+    border-radius: 8px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding: 8px;
+}
+
+#quill-editor .ql-toolbar .ql-stroke {
+    stroke: var(--text-primary);
+}
+
+#quill-editor .ql-toolbar .ql-fill {
+    fill: var(--text-primary);
+}
+
+#quill-editor .ql-toolbar button:hover,
+#quill-editor .ql-toolbar button:focus,
+#quill-editor .ql-toolbar button.ql-active {
+    color: var(--accent-color);
+}
+
+#quill-editor .ql-toolbar button:hover .ql-stroke,
+#quill-editor .ql-toolbar button:focus .ql-stroke,
+#quill-editor .ql-toolbar button.ql-active .ql-stroke {
+    stroke: var(--accent-color);
+}
+
+#quill-editor .ql-toolbar button:hover .ql-fill,
+#quill-editor .ql-toolbar button:focus .ql-fill,
+#quill-editor .ql-toolbar button.ql-active .ql-fill {
+    fill: var(--accent-color);
+}
+
+#quill-editor .ql-toolbar .ql-picker-label {
+    color: var(--text-primary);
+}
+
+#quill-editor .ql-toolbar .ql-picker-options {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+}
+
+#quill-editor .ql-toolbar .ql-picker-item {
+    color: var(--text-primary);
+}
+
+#quill-editor .ql-toolbar .ql-picker-item:hover {
+    color: var(--accent-color);
+    background: var(--bg-tertiary);
 }
 
 .modal-actions {
