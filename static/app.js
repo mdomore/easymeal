@@ -329,13 +329,30 @@ function toggleMobileMenu() {
     }
 }
 
-function syncMobileLanguageSwitcher() {
-    const desktopSwitcher = document.getElementById('language-switcher');
-    const mobileSwitcher = document.getElementById('mobile-language-switcher');
+function toggleLanguage() {
+    const currentLang = window.getCurrentLanguage ? window.getCurrentLanguage() : 'en';
+    const newLang = currentLang === 'en' ? 'fr' : 'en';
+    changeLanguage(newLang);
+    updateLanguageButtonText();
+}
+
+function updateLanguageButtonText() {
+    const currentLang = window.getCurrentLanguage ? window.getCurrentLanguage() : 'en';
+    const languageText = currentLang === 'en' ? 'English' : 'Français';
     
-    if (desktopSwitcher && mobileSwitcher) {
-        mobileSwitcher.value = desktopSwitcher.value;
-    }
+    const mobileText = document.getElementById('mobile-language-text');
+    const landingMobileText = document.getElementById('landing-mobile-language-text');
+    
+    if (mobileText) mobileText.textContent = languageText;
+    if (landingMobileText) landingMobileText.textContent = languageText;
+}
+
+// Expose functions globally
+window.toggleLanguage = toggleLanguage;
+window.updateLanguageButtonText = updateLanguageButtonText;
+
+function syncMobileLanguageSwitcher() {
+    updateLanguageButtonText();
 }
 
 // Landing page mobile menu functions
@@ -361,12 +378,7 @@ function toggleLandingMobileMenu() {
 }
 
 function syncLandingMobileLanguageSwitcher() {
-    const desktopSwitcher = document.getElementById('language-switcher-landing');
-    const mobileSwitcher = document.getElementById('landing-mobile-language-switcher');
-    
-    if (desktopSwitcher && mobileSwitcher) {
-        mobileSwitcher.value = desktopSwitcher.value;
-    }
+    updateLanguageButtonText();
 }
 
 // Close mobile menu on window resize to desktop size
@@ -442,6 +454,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     
     // Listen for language changes and update dynamic content
     window.addEventListener('languageChanged', () => {
+        // Update language button text
+        updateLanguageButtonText();
         // If meals view is currently visible, re-render it to update translations
         const mealsView = document.getElementById('meals-view');
         if (mealsView && !mealsView.classList.contains('hidden')) {

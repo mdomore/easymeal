@@ -37,15 +37,14 @@
                         <span></span>
                     </button>
                     <div class="nav-actions">
-                        <select id="language-switcher-landing" onchange="changeLanguage(this.value)" class="language-switcher" title="Change language">
-                            <option value="en">English</option>
-                            <option value="fr">Français</option>
-                        </select>
+                        <button onclick="showAuthModal()" class="btn-nav-link" data-i18n="landing.signIn">Sign in</button>
+                        <button onclick="tryEasyMeal()" class="btn-nav-primary" data-i18n="landing.tryEasyMeal">Try EasyMeal</button>
+                        <button onclick="toggleLanguage()" class="btn-dark-mode-nav" id="language-switcher-landing" title="Change language">
+                            <span id="language-icon-landing">🌐</span>
+                        </button>
                         <button onclick="toggleDarkMode()" class="btn-dark-mode-nav" id="dark-mode-toggle-landing" data-i18n-title="common.toggleDarkMode" title="Toggle dark mode">
                             <span id="dark-mode-icon-landing">🌙</span>
                         </button>
-                        <button onclick="showAuthModal()" class="btn-nav-link" data-i18n="landing.signIn">Sign in</button>
-                        <button onclick="tryEasyMeal()" class="btn-nav-primary" data-i18n="landing.tryEasyMeal">Try EasyMeal</button>
                     </div>
                 </div>
             </nav>
@@ -56,10 +55,10 @@
                     <div class="mobile-menu-content">
                         <div class="mobile-menu-item">
                             <label for="landing-mobile-language-switcher" class="mobile-menu-label" data-i18n="common.language">Language</label>
-                            <select id="landing-mobile-language-switcher" onchange="changeLanguage(this.value); toggleLandingMobileMenu();" class="language-switcher mobile-menu-select">
-                                <option value="en">English</option>
-                                <option value="fr">Français</option>
-                            </select>
+                            <button id="landing-mobile-language-switcher" onclick="toggleLanguage(); toggleLandingMobileMenu();" class="btn-secondary mobile-menu-btn">
+                                <span id="landing-mobile-language-icon">🌐</span>
+                                <span id="landing-mobile-language-text">English</span>
+                            </button>
                         </div>
                         <button onclick="toggleDarkMode(); toggleLandingMobileMenu();" class="btn-secondary mobile-menu-btn" id="landing-mobile-dark-mode-toggle">
                             <span id="landing-mobile-dark-mode-icon">🌙</span>
@@ -140,14 +139,13 @@
                     <span></span>
                 </button>
                 <div class="user-info">
-                    <select id="language-switcher" onchange="changeLanguage(this.value)" class="language-switcher" title="Change language">
-                        <option value="en">English</option>
-                        <option value="fr">Français</option>
-                    </select>
+                    <button onclick="logout()" class="btn-secondary" data-i18n="meals.logout">Logout</button>
+                    <button onclick="toggleLanguage()" class="btn-dark-mode" id="language-switcher" title="Change language">
+                        <span id="language-icon">🌐</span>
+                    </button>
                     <button onclick="toggleDarkMode()" class="btn-dark-mode" id="dark-mode-toggle" data-i18n-title="common.toggleDarkMode" title="Toggle dark mode">
                         <span id="dark-mode-icon">🌙</span>
                     </button>
-                    <button onclick="logout()" class="btn-secondary" data-i18n="meals.logout">Logout</button>
                 </div>
             </header>
             
@@ -157,10 +155,10 @@
                     <div class="mobile-menu-content">
                         <div class="mobile-menu-item">
                             <label for="mobile-language-switcher" class="mobile-menu-label" data-i18n="common.language">Language</label>
-                            <select id="mobile-language-switcher" onchange="changeLanguage(this.value); toggleMobileMenu();" class="language-switcher mobile-menu-select">
-                                <option value="en">English</option>
-                                <option value="fr">Français</option>
-                            </select>
+                            <button id="mobile-language-switcher" onclick="toggleLanguage(); toggleMobileMenu();" class="btn-secondary mobile-menu-btn">
+                                <span id="mobile-language-icon">🌐</span>
+                                <span id="mobile-language-text">English</span>
+                            </button>
                         </div>
                         <button onclick="toggleDarkMode(); toggleMobileMenu();" class="btn-secondary mobile-menu-btn" id="mobile-dark-mode-toggle">
                             <span id="mobile-dark-mode-icon">🌙</span>

@@ -95,13 +95,10 @@ async function initTranslations() {
     // Apply translations to elements with data-i18n attributes
     applyTranslations();
     
-        // Update language switcher dropdowns to show current language
-        const langSwitchers = document.querySelectorAll('#language-switcher, #language-switcher-landing, #mobile-language-switcher, #landing-mobile-language-switcher');
-        langSwitchers.forEach(switcher => {
-            if (switcher) {
-                switcher.value = currentLang;
-            }
-        });
+    // Update language toggle buttons (for mobile)
+    if (window.updateLanguageButtonText) {
+        window.updateLanguageButtonText();
+    }
 }
 
 /**
@@ -187,13 +184,10 @@ async function changeLanguage(lang) {
     const success = await loadTranslations(lang);
     if (success) {
         applyTranslations();
-        // Update language switcher dropdowns
-        const langSwitchers = document.querySelectorAll('#language-switcher, #language-switcher-landing, #mobile-language-switcher, #landing-mobile-language-switcher');
-        langSwitchers.forEach(switcher => {
-            if (switcher) {
-                switcher.value = lang;
-            }
-        });
+        // Update language toggle buttons (for mobile)
+        if (window.updateLanguageButtonText) {
+            window.updateLanguageButtonText();
+        }
         // Trigger custom event for JavaScript code that needs to update
         window.dispatchEvent(new CustomEvent('languageChanged', { detail: { lang } }));
         return true;
