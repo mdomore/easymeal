@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -40,6 +40,7 @@ class Meal(Base):
     description = Column(Text, nullable=True)
     url = Column(String, nullable=True)
     photo_filename = Column(String, nullable=True)
+    photos = Column(JSON, nullable=True)  # Array of photo objects: [{"filename": "...", "is_primary": true}, ...]
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 

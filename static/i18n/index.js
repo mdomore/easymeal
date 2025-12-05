@@ -95,13 +95,13 @@ async function initTranslations() {
     // Apply translations to elements with data-i18n attributes
     applyTranslations();
     
-    // Update language switcher dropdowns to show current language
-    const langSwitchers = document.querySelectorAll('#language-switcher, #language-switcher-landing');
-    langSwitchers.forEach(switcher => {
-        if (switcher) {
-            switcher.value = currentLang;
-        }
-    });
+        // Update language switcher dropdowns to show current language
+        const langSwitchers = document.querySelectorAll('#language-switcher, #language-switcher-landing, #mobile-language-switcher, #landing-mobile-language-switcher');
+        langSwitchers.forEach(switcher => {
+            if (switcher) {
+                switcher.value = currentLang;
+            }
+        });
 }
 
 /**
@@ -188,7 +188,7 @@ async function changeLanguage(lang) {
     if (success) {
         applyTranslations();
         // Update language switcher dropdowns
-        const langSwitchers = document.querySelectorAll('#language-switcher, #language-switcher-landing');
+        const langSwitchers = document.querySelectorAll('#language-switcher, #language-switcher-landing, #mobile-language-switcher, #landing-mobile-language-switcher');
         langSwitchers.forEach(switcher => {
             if (switcher) {
                 switcher.value = lang;

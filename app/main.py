@@ -77,6 +77,7 @@ class MealResponse(BaseModel):
     description: Optional[str] = None
     url: Optional[str] = None
     photo_filename: Optional[str] = None
+    photos: Optional[list] = None  # Array of photo objects: [{"filename": "...", "is_primary": true}, ...]
     created_at: Optional[datetime] = None
     user_id: Optional[int] = None
 

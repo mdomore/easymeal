@@ -63,7 +63,19 @@
     "photo": "Photo",
     "description": "Description",
     "recipeLink": "Lien de la Recette",
-    "created": "Créé"
+    "created": "Créé",
+    "tabManual": "Saisie Manuelle",
+    "tabImport": "Importer depuis une Photo",
+    "tabPhotos": "Photos",
+    "importDescription": "Téléchargez une photo de votre recette. Nous extrairons le texte automatiquement avec l'OCR.",
+    "choosePhoto": "Choisir une Photo",
+    "processing": "Traitement de la photo...",
+    "photosDescription": "Ajoutez jusqu'à 2 photos pour votre recette. Sélectionnez celle qui s'affichera dans la liste des recettes.",
+    "addPhoto": "Ajouter une Photo",
+    "setAsPrimary": "Définir comme Principale",
+    "removePhotoBtn": "Supprimer",
+    "primaryPhoto": "Photo Principale",
+    "maxPhotos": "Maximum 2 photos autorisées"
   },
   "messages": {
     "accountConverted": "Compte converti avec succès ! Vos recettes sont maintenant sauvegardées définitivement.",
@@ -92,7 +104,9 @@
     "usernameAlreadyTaken": "Le nom d'utilisateur est déjà pris"
   },
   "common": {
-    "toggleDarkMode": "Basculer le mode sombre"
+    "toggleDarkMode": "Basculer le mode sombre",
+    "toggleLightMode": "Basculer le mode clair",
+    "language": "Langue"
   }
 }
 

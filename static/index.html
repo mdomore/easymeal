@@ -31,6 +31,11 @@
             <nav class="landing-nav">
                 <div class="nav-container">
                     <div class="nav-logo">EasyMeal</div>
+                    <button class="burger-menu-btn landing-burger" id="landing-burger-menu-btn" onclick="toggleLandingMobileMenu()" aria-label="Toggle menu">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
                     <div class="nav-actions">
                         <select id="language-switcher-landing" onchange="changeLanguage(this.value)" class="language-switcher" title="Change language">
                             <option value="en">English</option>
@@ -44,6 +49,27 @@
                     </div>
                 </div>
             </nav>
+            
+            <!-- Landing Mobile Menu Overlay -->
+            <div class="mobile-menu-overlay" id="landing-mobile-menu-overlay" onclick="if(event.target === this) toggleLandingMobileMenu();">
+                <div class="mobile-menu" id="landing-mobile-menu" onclick="event.stopPropagation();">
+                    <div class="mobile-menu-content">
+                        <div class="mobile-menu-item">
+                            <label for="landing-mobile-language-switcher" class="mobile-menu-label" data-i18n="common.language">Language</label>
+                            <select id="landing-mobile-language-switcher" onchange="changeLanguage(this.value); toggleLandingMobileMenu();" class="language-switcher mobile-menu-select">
+                                <option value="en">English</option>
+                                <option value="fr">Français</option>
+                            </select>
+                        </div>
+                        <button onclick="toggleDarkMode(); toggleLandingMobileMenu();" class="btn-secondary mobile-menu-btn" id="landing-mobile-dark-mode-toggle">
+                            <span id="landing-mobile-dark-mode-icon">🌙</span>
+                            <span data-i18n="common.toggleDarkMode">Toggle dark mode</span>
+                        </button>
+                        <button onclick="showAuthModal(); toggleLandingMobileMenu();" class="btn-secondary mobile-menu-btn" data-i18n="landing.signIn">Sign in</button>
+                        <button onclick="tryEasyMeal(); toggleLandingMobileMenu();" class="btn-primary mobile-menu-btn" data-i18n="landing.tryEasyMeal">Try EasyMeal</button>
+                    </div>
+                </div>
+            </div>
 
             <main class="landing-main">
                 <section class="hero-section">
@@ -59,17 +85,14 @@
                 <section class="features-section">
                     <div class="features-grid">
                         <div class="feature-card">
-                            <div class="feature-icon">📥</div>
                             <h3 data-i18n="landing.feature1Title">From Any Source</h3>
                             <p data-i18n="landing.feature1Desc">Import recipes from URLs, photos, text, or books. All in one place.</p>
                         </div>
                         <div class="feature-card">
-                            <div class="feature-icon">📱</div>
                             <h3 data-i18n="landing.feature2Title">Always Accessible</h3>
                             <p data-i18n="landing.feature2Desc">Access your recipes from any device. Works offline too.</p>
                         </div>
                         <div class="feature-card">
-                            <div class="feature-icon">✨</div>
                             <h3 data-i18n="landing.feature3Title">Clean & Simple</h3>
                             <p data-i18n="landing.feature3Desc">No ads, no distractions. Just your recipes, beautifully organized.</p>
                         </div>
@@ -111,6 +134,11 @@
         <div id="meals-view" class="view hidden">
             <header>
                 <h1 data-i18n="meals.appName">EasyMeal</h1>
+                <button class="burger-menu-btn" id="burger-menu-btn" onclick="toggleMobileMenu()" aria-label="Toggle menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
                 <div class="user-info">
                     <select id="language-switcher" onchange="changeLanguage(this.value)" class="language-switcher" title="Change language">
                         <option value="en">English</option>
@@ -123,11 +151,32 @@
                 </div>
             </header>
             
+            <!-- Mobile Menu Overlay -->
+            <div class="mobile-menu-overlay" id="mobile-menu-overlay" onclick="if(event.target === this) toggleMobileMenu();">
+                <div class="mobile-menu" id="mobile-menu" onclick="event.stopPropagation();">
+                    <div class="mobile-menu-content">
+                        <div class="mobile-menu-item">
+                            <label for="mobile-language-switcher" class="mobile-menu-label" data-i18n="common.language">Language</label>
+                            <select id="mobile-language-switcher" onchange="changeLanguage(this.value); toggleMobileMenu();" class="language-switcher mobile-menu-select">
+                                <option value="en">English</option>
+                                <option value="fr">Français</option>
+                            </select>
+                        </div>
+                        <button onclick="toggleDarkMode(); toggleMobileMenu();" class="btn-secondary mobile-menu-btn" id="mobile-dark-mode-toggle">
+                            <span id="mobile-dark-mode-icon">🌙</span>
+                            <span data-i18n="common.toggleDarkMode">Toggle dark mode</span>
+                        </button>
+                        <button onclick="logout()" class="btn-secondary mobile-menu-btn" data-i18n="meals.logout">Logout</button>
+                    </div>
+                </div>
+            </div>
+            
             <main>
                 <div class="meals-header">
                     <div class="header-actions">
                         <div class="search-container">
                             <input type="text" id="search-input" data-i18n-placeholder="meals.searchPlaceholder" placeholder="Search recipes..." autocomplete="off">
+                            <button id="search-clear" class="search-clear hidden" onclick="clearSearch()" aria-label="Clear search">&times;</button>
                         </div>
                         <div class="buttons-row">
                             <button onclick="toggleSort()" class="btn-sort" id="sort-btn" data-i18n-title="meals.sortAlphabetically" title="Sort alphabetically">
@@ -206,20 +255,43 @@
                         <span class="close" onclick="closeMealModal()">&times;</span>
                         <h3 id="modal-title" data-i18n="modals.addMeal">Add Recipe</h3>
                         <form id="meal-form" onsubmit="saveMeal(event)">
-                            <input type="text" id="meal-name" data-i18n-placeholder="modals.mealName" placeholder="Recipe name" required>
-                            <label for="quill-editor" data-i18n="modals.descriptionOptional">Description (optional)</label>
-                            <div id="quill-editor"></div>
-                            <input type="hidden" id="meal-description" name="description">
-                            <input type="url" id="meal-url" data-i18n-placeholder="modals.recipeUrlOptional" placeholder="Recipe URL (optional)" autocomplete="url">
-                            <div class="photo-upload-section">
-                                <label for="meal-photo" class="photo-label" data-i18n="modals.photoOptional">Photo (optional)</label>
-                                <div class="photo-upload-buttons">
-                                    <input type="file" id="meal-photo" accept="image/*">
-                                    <button type="button" id="import-photo-ocr-btn" class="btn-secondary" onclick="importPhotoWithOCR()" data-i18n="modals.importPhotoOCR">📷 Import from Photo (OCR)</button>
-                                </div>
-                                <div id="photo-preview" class="photo-preview"></div>
-                                <button type="button" id="remove-photo-btn" class="btn-remove-photo hidden" onclick="removePhoto()" data-i18n="modals.removePhoto">Remove Photo</button>
+                            <!-- Tab Navigation -->
+                            <div class="modal-tabs">
+                                <button type="button" class="modal-tab active" data-tab="manual" onclick="switchTab('manual')" data-i18n="modals.tabManual">Manual Entry</button>
+                                <button type="button" class="modal-tab" data-tab="import" onclick="switchTab('import')" data-i18n="modals.tabImport">Import from Photo</button>
+                                <button type="button" class="modal-tab" data-tab="photos" onclick="switchTab('photos')" data-i18n="modals.tabPhotos">Photos</button>
                             </div>
+                            
+                            <!-- Tab Content -->
+                            <div id="tab-manual" class="tab-content active">
+                                <input type="text" id="meal-name" data-i18n-placeholder="modals.mealName" placeholder="Recipe name" required>
+                                <label for="quill-editor" data-i18n="modals.descriptionOptional">Description (optional)</label>
+                                <div id="quill-editor"></div>
+                                <input type="hidden" id="meal-description" name="description">
+                                <input type="url" id="meal-url" data-i18n-placeholder="modals.recipeUrlOptional" placeholder="Recipe URL (optional)" autocomplete="url">
+                            </div>
+                            
+                            <div id="tab-import" class="tab-content hidden">
+                                <div class="import-section">
+                                    <p class="import-description" data-i18n="modals.importDescription">Upload a photo of your recipe. We'll extract the text automatically using OCR.</p>
+                                    <input type="file" id="import-photo-input" accept="image/*" style="display: none;">
+                                    <button type="button" class="btn-primary btn-import-photo" onclick="document.getElementById('import-photo-input').click()" data-i18n="modals.choosePhoto">Choose Photo</button>
+                                    <div id="import-photo-preview" class="photo-preview"></div>
+                                    <div id="import-processing" class="import-processing hidden" data-i18n="modals.processing">Processing photo...</div>
+                                </div>
+                            </div>
+                            
+                            <div id="tab-photos" class="tab-content hidden">
+                                <div class="photos-section">
+                                    <p class="photos-description" data-i18n="modals.photosDescription">Add up to 2 photos for your recipe. Select which one to display in the recipe list.</p>
+                                    <div id="photos-container" class="photos-container">
+                                        <!-- Photos will be dynamically added here -->
+                                    </div>
+                                    <input type="file" id="photo-upload-input" accept="image/*" multiple style="display: none;">
+                                    <button type="button" class="btn-secondary btn-add-photo" onclick="addPhoto()" data-i18n="modals.addPhoto">Add Photo</button>
+                                </div>
+                            </div>
+                            
                             <div class="modal-actions">
                                 <button type="button" onclick="closeMealModal()" class="btn-secondary" data-i18n="modals.cancel">Cancel</button>
                                 <button type="submit" class="btn-primary" data-i18n="modals.save">Save</button>

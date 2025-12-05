@@ -7,6 +7,213 @@ let allMeals = []; // Store all meals for filtering
 let originalMealPhoto = null; // Track original photo when editing starts
 let photoRemoved = false; // Track if photo was explicitly removed
 let quillEditor = null; // Quill editor instance
+let currentTab = 'manual'; // Current active tab
+let recipePhotos = []; // Array to store photos: [{filename: "...", is_primary: true, url: "..."}, ...]
+
+// Tab switching function
+function switchTab(tabName) {
+    currentTab = tabName;
+    
+    // Update tab buttons
+    document.querySelectorAll('.modal-tab').forEach(tab => {
+        if (tab.dataset.tab === tabName) {
+            tab.classList.add('active');
+        } else {
+            tab.classList.remove('active');
+        }
+    });
+    
+    // Update tab content
+    document.querySelectorAll('.tab-content').forEach(content => {
+        if (content.id === `tab-${tabName}`) {
+            content.classList.remove('hidden');
+            content.classList.add('active');
+        } else {
+            content.classList.add('hidden');
+            content.classList.remove('active');
+        }
+    });
+}
+
+// Photo management functions
+function renderPhotosContainer() {
+    const container = document.getElementById('photos-container');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    recipePhotos.forEach((photo, index) => {
+        const photoItem = document.createElement('div');
+        photoItem.className = `photo-item ${photo.is_primary ? 'primary' : ''}`;
+        const photoUrl = photo.url || (photo.filename ? `static/photos/${photo.filename}` : '');
+        photoItem.innerHTML = `
+            ${photoUrl ? `<img src="${photoUrl}" alt="Recipe photo">` : '<div class="photo-placeholder">Photo loading...</div>'}
+            <div class="photo-item-actions">
+                ${photo.is_primary ? `<span class="photo-item-label">${window.t ? window.t('modals.primaryPhoto') : 'Primary Photo'}</span>` : `<button type="button" class="btn-secondary" onclick="setPrimaryPhoto(${index})" data-i18n="modals.setAsPrimary">Set as Primary</button>`}
+                <button type="button" class="btn-secondary" onclick="removePhotoFromList(${index})" data-i18n="modals.removePhotoBtn">Remove</button>
+            </div>
+        `;
+        container.appendChild(photoItem);
+    });
+    
+    // Update add photo button state
+    const addPhotoBtn = document.querySelector('.btn-add-photo');
+    if (addPhotoBtn) {
+        addPhotoBtn.disabled = recipePhotos.length >= 2;
+    }
+}
+
+async function addPhoto() {
+    if (recipePhotos.length >= 2) {
+        alert(window.t ? window.t('modals.maxPhotos') || 'Maximum 2 photos allowed' : 'Maximum 2 photos allowed');
+        return;
+    }
+    
+    const input = document.getElementById('photo-upload-input');
+    if (input) {
+        input.click();
+        input.onchange = async (e) => {
+            const files = Array.from(e.target.files);
+            if (files.length === 0) return;
+            
+            for (const file of files.slice(0, 2 - recipePhotos.length)) {
+                if (recipePhotos.length >= 2) break;
+                
+                // Upload photo
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    const response = await fetch(`${API_BASE}/meals/upload-photo`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${currentToken}`
+                        },
+                        body: formData
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to upload photo');
+                    }
+                    
+                    const data = await response.json();
+                    
+                    // Add to photos array
+                    recipePhotos.push({
+                        filename: data.filename,
+                        is_primary: recipePhotos.length === 0, // First photo is primary by default
+                        url: URL.createObjectURL(file)
+                    });
+                } catch (error) {
+                    console.error('Error uploading photo:', error);
+                    alert(window.t ? window.t('messages.failedUploadPhoto') : 'Failed to upload photo');
+                }
+            }
+            
+            renderPhotosContainer();
+            input.value = ''; // Reset input
+        };
+    }
+}
+
+function setPrimaryPhoto(index) {
+    recipePhotos.forEach((photo, i) => {
+        photo.is_primary = (i === index);
+    });
+    renderPhotosContainer();
+}
+
+function removePhotoFromList(index) {
+    recipePhotos.splice(index, 1);
+    renderPhotosContainer();
+}
+
+// Handle import photo from Import tab
+async function handleImportPhoto(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const importPreview = document.getElementById('import-photo-preview');
+    const importProcessing = document.getElementById('import-processing');
+    
+    // Show preview
+    const photoUrl = URL.createObjectURL(file);
+    importPreview.innerHTML = `<img src="${photoUrl}" alt="Uploaded photo" class="preview-image">`;
+    importProcessing.classList.remove('hidden');
+    
+    try {
+        // Upload photo and extract text
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await fetch(`${API_BASE}/meals/extract-text-from-photo`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${currentToken}`
+            },
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ detail: 'Failed to process photo' }));
+            alert(error.detail || 'Failed to extract text from photo');
+            importProcessing.classList.add('hidden');
+            return;
+        }
+        
+        const data = await response.json();
+        
+        // Store the filename - it's already uploaded
+        if (recipePhotos.length === 0) {
+            recipePhotos.push({
+                filename: data.filename,
+                is_primary: true,
+                url: photoUrl
+            });
+        } else {
+            recipePhotos[0] = {
+                filename: data.filename,
+                is_primary: true,
+                url: photoUrl
+            };
+        }
+        
+        // Populate form fields
+        document.getElementById('meal-name').value = '';
+        document.getElementById('meal-url').value = '';
+        
+        // Initialize Quill editor if not already done
+        initQuillEditor();
+        
+        // Populate description with extracted text
+        if (data.extracted_text && data.extracted_text.trim()) {
+            const text = data.extracted_text.trim();
+            quillEditor.setText(text);
+            
+            // Try to extract a name from the first line
+            const firstLine = text.split('\n')[0].trim();
+            if (firstLine && firstLine.length < 100) {
+                document.getElementById('meal-name').value = firstLine;
+            }
+        } else {
+            alert(window.t ? window.t('messages.noTextExtracted') : 'No text could be extracted from the photo. You can still add the recipe manually.');
+        }
+        
+        // Switch to Manual Entry tab to review/edit
+        switchTab('manual');
+        
+        // Update photos tab
+        renderPhotosContainer();
+        
+    } catch (error) {
+        console.error('OCR import error:', error);
+        alert('Failed to process photo. Please try again.');
+    } finally {
+        importProcessing.classList.add('hidden');
+        // Reset input
+        e.target.value = '';
+    }
+}
 
 // Helper function to strip HTML tags for preview
 function stripHtml(html) {
@@ -63,15 +270,118 @@ function toggleDarkMode() {
 
 function updateDarkModeIcons(isDark) {
     const icon = isDark ? '☀️' : '🌙';
+    const textKey = isDark ? 'common.toggleLightMode' : 'common.toggleDarkMode';
+    const text = window.t ? window.t(textKey) : (isDark ? 'Toggle light mode' : 'Toggle dark mode');
     
     const darkModeIcon = document.getElementById('dark-mode-icon');
     const darkModeIconAuth = document.getElementById('dark-mode-icon-auth');
     const darkModeIconLanding = document.getElementById('dark-mode-icon-landing');
+    const mobileDarkModeIcon = document.getElementById('mobile-dark-mode-icon');
+    const landingMobileDarkModeIcon = document.getElementById('landing-mobile-dark-mode-icon');
     
+    // Update icons
     if (darkModeIcon) darkModeIcon.textContent = icon;
     if (darkModeIconAuth) darkModeIconAuth.textContent = icon;
     if (darkModeIconLanding) darkModeIconLanding.textContent = icon;
+    if (mobileDarkModeIcon) mobileDarkModeIcon.textContent = icon;
+    if (landingMobileDarkModeIcon) landingMobileDarkModeIcon.textContent = icon;
+    
+    // Update text in mobile menu buttons
+    const mobileDarkModeToggle = document.getElementById('mobile-dark-mode-toggle');
+    const landingMobileDarkModeToggle = document.getElementById('landing-mobile-dark-mode-toggle');
+    
+    if (mobileDarkModeToggle) {
+        const textSpan = mobileDarkModeToggle.querySelector('span:last-child');
+        if (textSpan) textSpan.textContent = text;
+    }
+    if (landingMobileDarkModeToggle) {
+        const textSpan = landingMobileDarkModeToggle.querySelector('span:last-child');
+        if (textSpan) textSpan.textContent = text;
+    }
+    
+    // Update title attributes for desktop buttons
+    const darkModeToggle = document.getElementById('dark-mode-toggle');
+    const darkModeToggleLanding = document.getElementById('dark-mode-toggle-landing');
+    
+    if (darkModeToggle) darkModeToggle.setAttribute('title', text);
+    if (darkModeToggleLanding) darkModeToggleLanding.setAttribute('title', text);
 }
+
+// Mobile menu functions
+function toggleMobileMenu() {
+    const overlay = document.getElementById('mobile-menu-overlay');
+    const burgerBtn = document.getElementById('burger-menu-btn');
+    
+    if (overlay && burgerBtn) {
+        const isActive = overlay.classList.contains('active');
+        
+        if (isActive) {
+            overlay.classList.remove('active');
+            burgerBtn.classList.remove('active');
+            document.body.style.overflow = '';
+        } else {
+            overlay.classList.add('active');
+            burgerBtn.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            // Sync language switcher
+            syncMobileLanguageSwitcher();
+        }
+    }
+}
+
+function syncMobileLanguageSwitcher() {
+    const desktopSwitcher = document.getElementById('language-switcher');
+    const mobileSwitcher = document.getElementById('mobile-language-switcher');
+    
+    if (desktopSwitcher && mobileSwitcher) {
+        mobileSwitcher.value = desktopSwitcher.value;
+    }
+}
+
+// Landing page mobile menu functions
+function toggleLandingMobileMenu() {
+    const overlay = document.getElementById('landing-mobile-menu-overlay');
+    const burgerBtn = document.getElementById('landing-burger-menu-btn');
+    
+    if (overlay && burgerBtn) {
+        const isActive = overlay.classList.contains('active');
+        
+        if (isActive) {
+            overlay.classList.remove('active');
+            burgerBtn.classList.remove('active');
+            document.body.style.overflow = '';
+        } else {
+            overlay.classList.add('active');
+            burgerBtn.classList.add('active');
+            document.body.style.overflow = 'hidden';
+            // Sync language switcher
+            syncLandingMobileLanguageSwitcher();
+        }
+    }
+}
+
+function syncLandingMobileLanguageSwitcher() {
+    const desktopSwitcher = document.getElementById('language-switcher-landing');
+    const mobileSwitcher = document.getElementById('landing-mobile-language-switcher');
+    
+    if (desktopSwitcher && mobileSwitcher) {
+        mobileSwitcher.value = desktopSwitcher.value;
+    }
+}
+
+// Close mobile menu on window resize to desktop size
+window.addEventListener('resize', () => {
+    if (window.innerWidth > 768) {
+        const overlay = document.getElementById('mobile-menu-overlay');
+        if (overlay && overlay.classList.contains('active')) {
+            toggleMobileMenu();
+        }
+        const landingOverlay = document.getElementById('landing-mobile-menu-overlay');
+        if (landingOverlay && landingOverlay.classList.contains('active')) {
+            toggleLandingMobileMenu();
+        }
+    }
+});
 
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
@@ -448,16 +758,24 @@ function showMealsView() {
     document.getElementById('auth-modal').classList.add('hidden');
     document.getElementById('meals-view').classList.remove('hidden');
     
+    // Close mobile menu if open
+    const overlay = document.getElementById('mobile-menu-overlay');
+    if (overlay && overlay.classList.contains('active')) {
+        toggleMobileMenu();
+    }
+    
     // Setup offline sync
     setupOfflineSync();
     
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
         searchInput.value = ''; // Clear search on view change
+        updateSearchClearVisibility();
         // Ensure search input listener is set up
         if (!searchInput.hasAttribute('data-listener-attached')) {
             searchInput.addEventListener('input', () => {
                 filterAndDisplayMeals();
+                updateSearchClearVisibility();
             });
             searchInput.setAttribute('data-listener-attached', 'true');
         }
@@ -693,6 +1011,28 @@ function filterAndDisplayMeals() {
     displayMeals(filteredMeals);
 }
 
+function updateSearchClearVisibility() {
+    const searchInput = document.getElementById('search-input');
+    const searchClear = document.getElementById('search-clear');
+    if (searchInput && searchClear) {
+        if (searchInput.value.trim().length > 0) {
+            searchClear.classList.remove('hidden');
+        } else {
+            searchClear.classList.add('hidden');
+        }
+    }
+}
+
+function clearSearch() {
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        searchInput.value = '';
+        filterAndDisplayMeals();
+        updateSearchClearVisibility();
+        searchInput.focus();
+    }
+}
+
 function displayMeals(meals) {
     const mealsList = document.getElementById('meals-list');
     
@@ -766,12 +1106,28 @@ function showAddMealForm() {
     editingMealId = null;
     originalMealPhoto = null;
     photoRemoved = false;
+    recipePhotos = []; // Reset photos array
+    currentTab = 'manual';
+    
     document.getElementById('modal-title').textContent = window.t ? window.t('modals.addMeal') : 'Add Recipe';
     document.getElementById('meal-name').value = '';
     document.getElementById('meal-url').value = '';
-    document.getElementById('meal-photo').value = '';
-    document.getElementById('photo-preview').innerHTML = '';
-    document.getElementById('remove-photo-btn').classList.add('hidden');
+    
+    // Reset tabs to manual entry
+    switchTab('manual');
+    
+    // Clear import tab
+    document.getElementById('import-photo-preview').innerHTML = '';
+    document.getElementById('import-processing').classList.add('hidden');
+    
+    // Clear photos tab
+    renderPhotosContainer();
+    
+    // Setup import photo input handler
+    const importPhotoInput = document.getElementById('import-photo-input');
+    if (importPhotoInput) {
+        importPhotoInput.onchange = handleImportPhoto;
+    }
     
     // Initialize Quill editor if not already done
     initQuillEditor();
@@ -781,92 +1137,15 @@ function showAddMealForm() {
 }
 
 async function importPhotoWithOCR() {
-    // Create a file input element
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
+    // Open the form and switch to Import tab
+    showAddMealForm();
+    switchTab('import');
     
-    input.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        // Show loading state
-        const importBtn = document.getElementById('import-photo-ocr-btn');
-        const originalText = importBtn ? importBtn.textContent : '';
-        if (importBtn) {
-            importBtn.disabled = true;
-            importBtn.textContent = 'Processing...';
-        }
-        
-        try {
-            // Upload photo and extract text
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            const response = await fetch(`${API_BASE}/meals/extract-text-from-photo`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${currentToken}`
-                },
-                body: formData
-            });
-            
-            if (!response.ok) {
-                const error = await response.json().catch(() => ({ detail: 'Failed to process photo' }));
-                alert(error.detail || 'Failed to extract text from photo');
-                return;
-            }
-            
-            const data = await response.json();
-            
-            // Open the meal form and populate it
-            showAddMealForm();
-            
-            // Set the photo preview
-            const photoPreview = document.getElementById('photo-preview');
-            const photoUrl = URL.createObjectURL(file);
-            photoPreview.innerHTML = `<img src="${photoUrl}" alt="Uploaded photo" class="preview-image">`;
-            document.getElementById('remove-photo-btn').classList.remove('hidden');
-            
-            // Store the filename from OCR upload - it's already uploaded
-            originalMealPhoto = data.filename;
-            
-            // Also set the file input so the preview works
-            const photoInput = document.getElementById('meal-photo');
-            const dataTransfer = new DataTransfer();
-            dataTransfer.items.add(file);
-            photoInput.files = dataTransfer.files;
-            
-            // Populate description with extracted text
-            if (data.extracted_text && data.extracted_text.trim()) {
-                initQuillEditor();
-                // Insert text as plain text, preserving line breaks
-                const text = data.extracted_text.trim();
-                quillEditor.setText(text);
-            } else {
-                alert(window.t ? window.t('messages.noTextExtracted') : 'No text could be extracted from the photo. You can still add the recipe manually.');
-            }
-            
-            // Try to extract a name from the first line
-            if (data.extracted_text) {
-                const firstLine = data.extracted_text.split('\n')[0].trim();
-                if (firstLine && firstLine.length < 100) {
-                    document.getElementById('meal-name').value = firstLine;
-                }
-            }
-            
-        } catch (error) {
-            console.error('OCR import error:', error);
-            alert('Failed to process photo. Please try again.');
-        } finally {
-            if (importBtn) {
-                importBtn.disabled = false;
-                importBtn.textContent = originalText;
-            }
-        }
-    };
-    
-    input.click();
+    // Trigger the import photo input
+    const importPhotoInput = document.getElementById('import-photo-input');
+    if (importPhotoInput) {
+        importPhotoInput.click();
+    }
 }
 
 function editMeal(mealId) {
@@ -888,7 +1167,41 @@ function editMeal(mealId) {
     .then(meal => {
         document.getElementById('meal-name').value = meal.name;
         document.getElementById('meal-url').value = meal.url || '';
-        document.getElementById('meal-photo').value = '';
+        
+        // Reset tabs to manual entry
+        switchTab('manual');
+        
+        // Load photos from meal
+        recipePhotos = [];
+        if (meal.photos && Array.isArray(meal.photos) && meal.photos.length > 0) {
+            recipePhotos = meal.photos.map(photo => ({
+                filename: photo.filename,
+                is_primary: photo.is_primary || false,
+                url: null // Will be loaded from server
+            }));
+        } else if (meal.photo_filename) {
+            // Backward compatibility: convert old photo_filename to photos array
+            recipePhotos = [{
+                filename: meal.photo_filename,
+                is_primary: true,
+                url: null
+            }];
+        }
+        renderPhotosContainer();
+        
+        // Track original photo for backward compatibility
+        originalMealPhoto = meal.photo_filename || null;
+        photoRemoved = false;
+        
+        // Clear import tab
+        document.getElementById('import-photo-preview').innerHTML = '';
+        document.getElementById('import-processing').classList.add('hidden');
+        
+        // Setup import photo input handler
+        const importPhotoInput = document.getElementById('import-photo-input');
+        if (importPhotoInput) {
+            importPhotoInput.onchange = handleImportPhoto;
+        }
         
         // Initialize Quill editor if not already done
         initQuillEditor();
@@ -900,19 +1213,6 @@ function editMeal(mealId) {
             quillEditor.root.innerHTML = tempDiv.innerHTML;
         } else {
             quillEditor.setContents([]);
-        }
-        
-        // Track original photo and show existing photo if any
-        originalMealPhoto = meal.photo_filename || null;
-        photoRemoved = false;
-        const photoPreview = document.getElementById('photo-preview');
-        const removeBtn = document.getElementById('remove-photo-btn');
-        if (meal.photo_filename) {
-            photoPreview.innerHTML = `<img src="static/photos/${escapeHtml(meal.photo_filename)}" alt="Meal photo" class="preview-image">`;
-            removeBtn.classList.remove('hidden');
-        } else {
-            photoPreview.innerHTML = '';
-            removeBtn.classList.add('hidden');
         }
         
         document.getElementById('meal-modal').classList.remove('hidden');
@@ -928,37 +1228,26 @@ function closeMealModal() {
     editingMealId = null;
     originalMealPhoto = null;
     photoRemoved = false;
-    document.getElementById('meal-photo').value = '';
-    document.getElementById('photo-preview').innerHTML = '';
-    document.getElementById('remove-photo-btn').classList.add('hidden');
-}
-
-function removePhoto() {
-    document.getElementById('meal-photo').value = '';
-    document.getElementById('photo-preview').innerHTML = '';
-    document.getElementById('remove-photo-btn').classList.add('hidden');
-    photoRemoved = true;
-}
-
-// Preview photo when file is selected
-document.addEventListener('DOMContentLoaded', () => {
-    const photoInput = document.getElementById('meal-photo');
-    if (photoInput) {
-        photoInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                photoRemoved = false; // Reset removal flag when new file is selected
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const photoPreview = document.getElementById('photo-preview');
-                    photoPreview.innerHTML = `<img src="${event.target.result}" alt="Preview" class="preview-image">`;
-                    document.getElementById('remove-photo-btn').classList.remove('hidden');
-                };
-                reader.readAsDataURL(file);
-            }
-        });
+    recipePhotos = []; // Reset photos array
+    
+    // Clear import tab
+    const importPhotoInput = document.getElementById('import-photo-input');
+    if (importPhotoInput) {
+        importPhotoInput.value = '';
     }
-});
+    const importPreview = document.getElementById('import-photo-preview');
+    if (importPreview) {
+        importPreview.innerHTML = '';
+    }
+    const importProcessing = document.getElementById('import-processing');
+    if (importProcessing) {
+        importProcessing.classList.add('hidden');
+    }
+    
+    // Clear photos tab
+    renderPhotosContainer();
+}
+
 
 function toggleMealMenu(mealId) {
     // Close all other menus and remove active class from their cards
@@ -1036,54 +1325,8 @@ async function saveMeal(event) {
     initQuillEditor(); // Ensure editor is initialized
     const description = quillEditor.root.innerHTML.trim() || null;
     const mealUrl = document.getElementById('meal-url').value.trim();
-    const photoFile = document.getElementById('meal-photo').files[0];
-    const photoPreview = document.getElementById('photo-preview');
     
     try {
-        let photoFilename = null;
-        let shouldUpdatePhoto = false;
-        
-        // Check if photo was imported via OCR (already uploaded)
-        if (originalMealPhoto && !editingMealId) {
-            // Photo was imported via OCR, use the filename from OCR response
-            photoFilename = originalMealPhoto;
-            shouldUpdatePhoto = true;
-        } else if (photoFile) {
-            // Upload photo if a new file is selected (not from OCR)
-            const formData = new FormData();
-            formData.append('file', photoFile);
-            
-            const uploadResponse = await fetch(`${API_BASE}/meals/upload-photo`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${currentToken}`
-                },
-                body: formData
-            });
-            
-            if (!uploadResponse.ok) {
-                const error = await uploadResponse.json().catch(() => ({ detail: 'Failed to upload photo' }));
-                alert(error.detail || 'Failed to upload photo');
-                return;
-            }
-            
-            const uploadData = await uploadResponse.json();
-            photoFilename = uploadData.filename;
-            shouldUpdatePhoto = true;
-        } else if (editingMealId) {
-            // When editing: check if photo was removed or keep existing
-            if (photoRemoved && originalMealPhoto) {
-                // Photo was explicitly removed
-                photoFilename = "";
-                shouldUpdatePhoto = true;
-            } else if (!photoRemoved && originalMealPhoto) {
-                // Keep existing photo (no changes) - don't update
-                photoFilename = null;
-                shouldUpdatePhoto = false;
-            }
-            // If there was no original photo and no new file, don't update photo field
-        }
-        
         // Prepare meal data
         const url = editingMealId ? `${API_BASE}/meals/${editingMealId}` : `${API_BASE}/meals`;
         const method = editingMealId ? 'PUT' : 'POST';
@@ -1093,9 +1336,15 @@ async function saveMeal(event) {
             url: mealUrl || null
         };
         
-        // Include photo in body if it's being set/updated
-        if (shouldUpdatePhoto && photoFilename !== null) {
-            body.photo_filename = photoFilename;
+        // Include photos array if we have photos from the Photos tab
+        if (recipePhotos && recipePhotos.length > 0) {
+            body.photos = recipePhotos.map(photo => ({
+                filename: photo.filename,
+                is_primary: photo.is_primary || false
+            }));
+            // Set photo_filename for backward compatibility (use primary photo)
+            const primaryPhoto = recipePhotos.find(p => p.is_primary) || recipePhotos[0];
+            body.photo_filename = primaryPhoto.filename;
         }
         
         // Check if offline
