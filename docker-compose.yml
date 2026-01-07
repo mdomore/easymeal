@@ -46,7 +46,7 @@ services:
       - ./static:/app/static
     environment:
       # Connect to Supabase PostgreSQL database
-      - DATABASE_URL=postgresql://postgres:${SUPABASE_POSTGRES_PASSWORD:-abbb4e639a90843bb672cd9a34a829e7}@supabase-db:5432/easymeal
+      - DATABASE_URL=postgresql://postgres:${SUPABASE_POSTGRES_PASSWORD}@supabase-db:5432/easymeal
       # Supabase Storage configuration
       - SUPABASE_URL=http://supabase-kong:8000
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
