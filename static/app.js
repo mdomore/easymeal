@@ -271,7 +271,13 @@ function toggleDarkMode() {
 function updateDarkModeIcons(isDark) {
     const icon = isDark ? '☀️' : '🌙';
     const textKey = isDark ? 'common.toggleLightMode' : 'common.toggleDarkMode';
-    const text = window.t ? window.t(textKey) : (isDark ? 'Toggle light mode' : 'Toggle dark mode');
+    let text;
+    try {
+        text = (window.t && typeof window.t === 'function') ? window.t(textKey) : (isDark ? 'Toggle light mode' : 'Toggle dark mode');
+    } catch (e) {
+        // Fallback if translation not available
+        text = isDark ? 'Toggle light mode' : 'Toggle dark mode';
+    }
     
     const darkModeIcon = document.getElementById('dark-mode-icon');
     const darkModeIconAuth = document.getElementById('dark-mode-icon-auth');

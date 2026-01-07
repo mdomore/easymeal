@@ -44,6 +44,11 @@ async function loadTranslations(lang = 'en') {
  * Get translation for a key (supports nested keys like "landing.signIn")
  */
 function t(key, params = {}) {
+    // Check if translations are loaded
+    if (!translations || typeof translations !== 'object') {
+        return key;
+    }
+    
     const keys = key.split('.');
     let value = translations;
     
@@ -52,8 +57,10 @@ function t(key, params = {}) {
         if (value && typeof value === 'object' && k in value) {
             value = value[k];
         } else {
-            // Key not found, return the key as fallback
-            console.warn(`Translation key not found: ${key}`);
+            // Key not found, return the key as fallback (silently if translations not fully loaded)
+            if (translations && Object.keys(translations).length > 0) {
+                console.warn(`Translation key not found: ${key}`);
+            }
             return key;
         }
     }

@@ -240,19 +240,19 @@ def get_ocr_reader():
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database and MinIO bucket on startup"""
+    """Initialize database and Supabase Storage bucket on startup"""
     init_db()
     try:
         ensure_bucket_exists()
     except Exception as e:
-        print(f"Warning: Could not initialize MinIO bucket: {e}")
+        print(f"Warning: Could not initialize Supabase Storage bucket: {e}")
     # Note: OCR reader will be initialized lazily on first use to avoid slow startup
 
 
-# Serve photos from MinIO directly
+# Serve photos from Supabase Storage directly
 @app.get("/static/photos/{filename}")
 async def serve_photo(filename: str):
-    """Serve photo directly from MinIO"""
+    """Serve photo directly from Supabase Storage"""
     try:
         from fastapi.responses import StreamingResponse
         from io import BytesIO

@@ -1,135 +1,191 @@
-from minio import Minio
-from minio.error import S3Error
 import os
 from pathlib import Path
 import uuid
-from urllib.parse import urlparse
+from io import BytesIO
+import requests
 
-MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "localhost:9000")
-MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
-MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
-MINIO_BUCKET = os.getenv("MINIO_BUCKET", "photos")
-MINIO_SECURE = os.getenv("MINIO_SECURE", "false").lower() == "true"
-# External URL for presigned URLs (accessible from browser)
-MINIO_EXTERNAL_URL = os.getenv("MINIO_EXTERNAL_URL", None)
+# Supabase configuration
+SUPABASE_URL = os.getenv("SUPABASE_URL", "http://supabase-kong:8000")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", os.getenv("SUPABASE_ANON_KEY"))
+SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "photos")
 
-# Initialize MinIO client
-minio_client = Minio(
-    MINIO_ENDPOINT,
-    access_key=MINIO_ACCESS_KEY,
-    secret_key=MINIO_SECRET_KEY,
-    secure=MINIO_SECURE
-)
+
+def get_headers():
+    """Get common headers for Supabase API requests"""
+    return {
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "apikey": SUPABASE_KEY
+    }
 
 
 def ensure_bucket_exists():
     """Create bucket if it doesn't exist"""
     try:
-        if not minio_client.bucket_exists(MINIO_BUCKET):
-            minio_client.make_bucket(MINIO_BUCKET)
-    except S3Error as e:
+        # Check if bucket exists
+        response = requests.get(
+            f"{SUPABASE_URL}/storage/v1/bucket",
+            headers=get_headers()
+        )
+        
+        if response.status_code == 200:
+            buckets = response.json()
+            bucket_names = [b.get("name") for b in buckets] if isinstance(buckets, list) else []
+            
+            if SUPABASE_BUCKET not in bucket_names:
+                # Create bucket with public access
+                create_response = requests.post(
+                    f"{SUPABASE_URL}/storage/v1/bucket",
+                    headers=get_headers(),
+                    json={
+                        "name": SUPABASE_BUCKET,
+                        "public": True,
+                        "file_size_limit": 52428800  # 50MB limit
+                    }
+                )
+                if create_response.status_code in [200, 201]:
+                    print(f"Created bucket: {SUPABASE_BUCKET}")
+                else:
+                    print(f"Warning: Could not create bucket: {create_response.text}")
+    except Exception as e:
         print(f"Error ensuring bucket exists: {e}")
-        raise
+        # Don't raise - bucket might already exist
+
+
+def optimize_image(image_data: bytes, max_width: int = 1920, max_height: int = 1920, quality: int = 85) -> bytes:
+    """Optimize image by resizing and compressing"""
+    try:
+        from PIL import Image
+        from io import BytesIO
+        
+        # Open image
+        img = Image.open(BytesIO(image_data))
+        
+        # Convert RGBA to RGB if necessary (for JPEG)
+        if img.mode in ('RGBA', 'LA', 'P'):
+            # Create white background
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+            img = background
+        elif img.mode != 'RGB':
+            img = img.convert('RGB')
+        
+        # Calculate new dimensions while maintaining aspect ratio
+        original_width, original_height = img.size
+        ratio = min(max_width / original_width, max_height / original_height, 1.0)
+        
+        if ratio < 1.0:
+            new_width = int(original_width * ratio)
+            new_height = int(original_height * ratio)
+            img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        
+        # Compress and save as JPEG
+        output = BytesIO()
+        img.save(output, format='JPEG', quality=quality, optimize=True)
+        output.seek(0)
+        
+        return output.read()
+    except Exception as e:
+        print(f"Error optimizing image: {e}")
+        # Return original if optimization fails
+        return image_data
 
 
 def upload_photo(file_content: bytes, file_extension: str = ".jpg") -> str:
-    """Upload photo to MinIO and return filename"""
+    """Upload photo to Supabase Storage and return filename (with optimization)"""
     ensure_bucket_exists()
+    
+    # Optimize image before uploading
+    try:
+        optimized_content = optimize_image(file_content)
+        original_size = len(file_content)
+        optimized_size = len(optimized_content)
+        reduction = ((original_size - optimized_size) / original_size * 100) if original_size > 0 else 0
+        print(f"Image optimized: {original_size / 1024:.1f}KB -> {optimized_size / 1024:.1f}KB ({reduction:.1f}% reduction)")
+        file_content = optimized_content
+        file_extension = ".jpg"  # Always save as JPEG after optimization
+    except Exception as e:
+        print(f"Warning: Image optimization failed, using original: {e}")
     
     # Generate unique filename
     filename = f"{uuid.uuid4()}{file_extension}"
     
     try:
-        from io import BytesIO
-        file_stream = BytesIO(file_content)
-        file_size = len(file_content)
+        # Content type is always JPEG after optimization
+        content_type = "image/jpeg"
         
-        # Determine content type based on extension
-        content_type_map = {
-            ".jpg": "image/jpeg",
-            ".jpeg": "image/jpeg",
-            ".png": "image/png",
-            ".gif": "image/gif",
-            ".webp": "image/webp"
-        }
-        content_type = content_type_map.get(file_extension.lower(), "image/jpeg")
+        # Upload to Supabase Storage
+        headers = get_headers()
+        headers["Content-Type"] = content_type
+        headers["x-upsert"] = "false"
         
-        minio_client.put_object(
-            MINIO_BUCKET,
-            filename,
-            file_stream,
-            file_size,
-            content_type=content_type
+        response = requests.post(
+            f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{filename}",
+            headers=headers,
+            data=file_content
         )
         
+        if response.status_code not in [200, 201]:
+            raise Exception(f"Upload error: {response.status_code} - {response.text}")
+        
         return filename
-    except S3Error as e:
+    except Exception as e:
         print(f"Error uploading photo: {e}")
         raise
 
 
 def get_photo_object(filename: str):
-    """Get photo object from MinIO"""
+    """Get photo object from Supabase Storage"""
     try:
-        from io import BytesIO
-        response = minio_client.get_object(MINIO_BUCKET, filename)
-        data = BytesIO(response.read())
-        response.close()
-        response.release_conn()
-        return data
-    except S3Error as e:
+        # Download file from Supabase Storage
+        response = requests.get(
+            f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{filename}",
+            headers=get_headers()
+        )
+        
+        if response.status_code == 200:
+            return BytesIO(response.content)
+        else:
+            raise Exception(f"Download error: {response.status_code} - {response.text}")
+    except Exception as e:
         print(f"Error getting photo: {e}")
         raise
 
 
 def delete_photo(filename: str):
-    """Delete photo from MinIO"""
+    """Delete photo from Supabase Storage"""
     try:
-        minio_client.remove_object(MINIO_BUCKET, filename)
-    except S3Error as e:
+        response = requests.delete(
+            f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{filename}",
+            headers=get_headers()
+        )
+        # Don't raise on error - photo might not exist
+    except Exception as e:
         print(f"Error deleting photo: {e}")
         # Don't raise - photo might not exist
 
 
 def get_photo_url(filename: str, expires_in_seconds: int = 3600) -> str:
-    """Get presigned URL for photo (valid for expires_in_seconds)"""
+    """Get public URL for photo from Supabase Storage"""
     try:
-        from datetime import timedelta
-        url = minio_client.presigned_get_object(
-            MINIO_BUCKET,
-            filename,
-            expires=timedelta(seconds=expires_in_seconds)
-        )
+        # For public buckets, we can construct the URL directly
+        # Format: {SUPABASE_URL}/storage/v1/object/public/{bucket}/{filename}
         
-        # Replace internal Docker hostname with external URL if configured
-        if MINIO_EXTERNAL_URL:
-            # Parse the presigned URL and replace the hostname
-            parsed = urlparse(url)
-            external_parsed = urlparse(MINIO_EXTERNAL_URL)
-            # Reconstruct URL with external hostname but keep the path and query
-            url = f"{external_parsed.scheme}://{external_parsed.netloc}{parsed.path}?{parsed.query}"
-        elif "minio:9000" in url:
-            # If no external URL configured but we see internal hostname, use localhost with http
-            url = url.replace("http://minio:9000", "http://localhost:9000")
-            url = url.replace("https://minio:9000", "http://localhost:9000")
-            # Also handle if protocol is missing
-            if url.startswith("minio:9000"):
-                url = url.replace("minio:9000", "localhost:9000")
-                if not url.startswith("http"):
-                    url = f"http://{url}"
+        # Remove trailing slash from URL if present
+        base_url = SUPABASE_URL.rstrip('/')
         
-        # Ensure http (not https) for localhost since MinIO is not using SSL
-        if "localhost:9000" in url and url.startswith("https://"):
-            url = url.replace("https://", "http://")
+        # Construct public URL
+        public_url = f"{base_url}/storage/v1/object/public/{SUPABASE_BUCKET}/{filename}"
         
-        return url
-    except S3Error as e:
+        return public_url
+    except Exception as e:
         print(f"Error generating photo URL: {e}")
         raise
 
 
 def migrate_photos_from_filesystem(photos_dir: Path):
-    """Migrate photos from filesystem to MinIO"""
+    """Migrate photos from filesystem to Supabase Storage"""
     ensure_bucket_exists()
     
     if not photos_dir.exists():
@@ -143,23 +199,12 @@ def migrate_photos_from_filesystem(photos_dir: Path):
                 with open(photo_file, "rb") as f:
                     file_content = f.read()
                 
-                # Upload to MinIO with same filename
-                filename = photo_file.name
-                from io import BytesIO
-                file_stream = BytesIO(file_content)
-                
-                minio_client.put_object(
-                    MINIO_BUCKET,
-                    filename,
-                    file_stream,
-                    len(file_content),
-                    content_type=f"image/{photo_file.suffix[1:].lower()}"
-                )
+                # Upload to Supabase Storage with same filename
+                upload_photo(file_content, photo_file.suffix)
                 
                 migrated_count += 1
-                print(f"Migrated photo: {filename}")
+                print(f"Migrated photo: {photo_file.name}")
             except Exception as e:
                 print(f"Error migrating photo {photo_file.name}: {e}")
     
-    print(f"Migrated {migrated_count} photos to MinIO")
-
+    print(f"Migrated {migrated_count} photos to Supabase Storage")
