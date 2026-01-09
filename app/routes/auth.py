@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Request
 from sqlalchemy.orm import Session
 import os
 import jwt
@@ -6,12 +6,18 @@ import jwt
 from app.database import get_db, User
 from app.auth import get_current_user, get_supabase_client
 from app import schemas
+from app.rate_limit import rate_limit_dependency
 
 router = APIRouter(prefix="/api", tags=["auth"])
 
 
 @router.post("/register", response_model=schemas.UserResponse, status_code=201)
-async def register(user: schemas.UserRegister, db: Session = Depends(get_db)):
+async def register(
+    user: schemas.UserRegister,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: bool = Depends(rate_limit_dependency("register"))
+):
     """Register a new user with Supabase Auth"""
     try:
         # Check if username exists in easymeal
@@ -73,7 +79,12 @@ async def register(user: schemas.UserRegister, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=schemas.Token)
-async def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
+async def login(
+    user: schemas.UserLogin,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: bool = Depends(rate_limit_dependency("login"))
+):
     """Login with Supabase Auth - supports both username and email. Auto-creates easymeal user if needed."""
     try:
         # Determine email: try username as email, or lookup from easymeal DB
@@ -153,20 +164,3 @@ async def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
 @router.get("/me", response_model=schemas.UserResponse)
 async def get_current_user_info(current_user: dict = Depends(get_current_user)):
     return current_user
-
-
-# Admin endpoint to view all users (for debugging - remove in production)
-@router.get("/users")
-async def get_all_users(db: Session = Depends(get_db)):
-    """Get all users - for debugging purposes only"""
-    users = db.query(User).order_by(User.created_at.desc()).all()
-    return [
-        {
-            "id": u.id,
-            "username": u.username,
-            "email": u.email,
-            "created_at": u.created_at.isoformat() if u.created_at else None,
-            "is_temporary": u.is_temporary
-        }
-        for u in users
-    ]
