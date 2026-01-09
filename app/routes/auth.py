@@ -8,6 +8,11 @@ from app import schemas
 from app.rate_limit import rate_limit_dependency
 from app.config import SUPABASE_JWT_SECRET
 from app.error_handler import create_safe_http_exception
+from app.security_logging import (
+    log_failed_login, log_successful_login,
+    log_failed_registration, log_successful_registration,
+    log_rate_limit_exceeded, log_authentication_failure
+)
 
 router = APIRouter(prefix="/api", tags=["auth"])
 
@@ -24,6 +29,7 @@ async def register(
         # Check if username exists in easymeal
         existing_user = db.query(User).filter(User.username == user.username).first()
         if existing_user:
+            log_failed_registration(request, user_identifier=user.username, reason="Username already registered")
             raise HTTPException(status_code=400, detail="Username already registered")
         
         # Register with Supabase Auth
@@ -56,7 +62,10 @@ async def register(
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
-        
+
+        # Log successful registration
+        log_successful_registration(request, user_identifier=user.username)
+
         return {
             "id": new_user.id,
             "username": new_user.username,
@@ -64,11 +73,15 @@ async def register(
             "is_temporary": new_user.is_temporary,
             "is_premium": new_user.is_premium
         }
-    except HTTPException:
+    except HTTPException as e:
+        # Log failed registration
+        if e.status_code == 400:
+            log_failed_registration(request, user_identifier=user.username, reason=str(e.detail))
         raise
     except Exception as e:
         error_msg = str(e).lower()
         if "already registered" in error_msg or "already exists" in error_msg or "user already registered" in error_msg:
+            log_failed_registration(request, user_identifier=user.username, reason="Email already registered")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered"
@@ -113,6 +126,7 @@ async def login(
         })
         
         if not response.session or not response.session.access_token:
+            log_failed_login(request, user_identifier=user.username, reason="Invalid credentials")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials"
@@ -148,13 +162,21 @@ async def login(
         except Exception as user_creation_error:
             print(f"Warning: Could not create easymeal user: {user_creation_error}")
         
+        # Log successful login
+        log_successful_login(request, user_identifier=email)
+        
         return {
             "access_token": response.session.access_token,
             "token_type": "bearer"
         }
-    except HTTPException:
+    except HTTPException as e:
+        # Log failed login
+        if e.status_code == 401:
+            log_failed_login(request, user_identifier=user.username, reason=str(e.detail))
         raise
     except Exception as e:
+        # Log failed login
+        log_failed_login(request, user_identifier=user.username, reason="Login error")
         # Use safe error handler - don't expose internal error details
         # Log server-side for debugging, but return generic message to client
         raise create_safe_http_exception(

@@ -12,6 +12,7 @@ from app.config import (
     SUPABASE_ANON_KEY,
     SUPABASE_JWT_SECRET
 )
+from app.security_logging import log_authentication_failure
 
 # Create Supabase client with service role key for admin operations
 # Initialize lazily to avoid startup errors
@@ -53,6 +54,7 @@ async def get_current_user(
     token = _get_token_from_request(request)
     
     if not token:
+        log_authentication_failure(request, reason="No token provided")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
@@ -73,6 +75,7 @@ async def get_current_user(
         email = decoded.get("email")
         
         if not supabase_user_id:
+            log_authentication_failure(request, reason="Invalid token: missing user ID")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token",
@@ -110,20 +113,21 @@ async def get_current_user(
             "is_premium": easymeal_user.is_premium
         }
     except jwt.ExpiredSignatureError:
+        log_authentication_failure(request, reason="Token expired")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
     except jwt.InvalidTokenError as e:
-        print(f"Invalid token error: {e}")
+        log_authentication_failure(request, reason="Invalid token format")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
             headers={"WWW-Authenticate": "Bearer"},
         )
     except Exception as e:
-        print(f"Auth error: {e}")
+        log_authentication_failure(request, reason="Authentication error")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
