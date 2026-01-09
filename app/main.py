@@ -13,6 +13,7 @@ from app.routes import auth, meals, static
 from app.config import CORS_ORIGINS_LIST, ENVIRONMENT
 from app.security_headers import SecurityHeadersMiddleware
 from app.csrf import CSRFProtectionMiddleware
+from app.cookie_security import SecureCookieMiddleware
 from alembic.config import Config
 from alembic import command
 
@@ -21,6 +22,12 @@ app = FastAPI(title="EasyMeal Recipe App", version="1.0.0", root_path="/easymeal
 # Security headers middleware (must be added first to apply to all responses)
 app.add_middleware(
     SecurityHeadersMiddleware,
+    environment=ENVIRONMENT
+)
+
+# Secure cookie middleware (ensures all cookies have secure settings)
+app.add_middleware(
+    SecureCookieMiddleware,
     environment=ENVIRONMENT
 )
 
