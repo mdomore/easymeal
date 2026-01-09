@@ -1,6 +1,11 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List
 from datetime import datetime
+
+from app.validators import (
+    validate_username, validate_password, validate_meal_name,
+    validate_description, validate_url, sanitize_filename
+)
 
 
 # Auth / User schemas
@@ -8,11 +13,26 @@ class UserRegister(BaseModel):
     username: str
     email: EmailStr
     password: str
+    
+    @field_validator('username')
+    @classmethod
+    def validate_username_field(cls, v: str) -> str:
+        return validate_username(v)
+    
+    @field_validator('password')
+    @classmethod
+    def validate_password_field(cls, v: str) -> str:
+        return validate_password(v)
 
 
 class UserLogin(BaseModel):
     username: str  # Can be username or email
     password: str
+    
+    @field_validator('password')
+    @classmethod
+    def validate_password_field(cls, v: str) -> str:
+        return validate_password(v)
 
 
 class UserResponse(BaseModel):
@@ -37,6 +57,32 @@ class MealBase(BaseModel):
     description: Optional[str] = None
     url: Optional[str] = None
     photo_filename: Optional[str] = None
+    
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        return validate_meal_name(v)
+    
+    @field_validator('description')
+    @classmethod
+    def validate_description_field(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        return validate_description(v)
+    
+    @field_validator('url')
+    @classmethod
+    def validate_url_field(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        return validate_url(v)
+    
+    @field_validator('photo_filename')
+    @classmethod
+    def validate_photo_filename(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        return sanitize_filename(v)
 
 
 class MealCreate(MealBase):
@@ -48,6 +94,34 @@ class MealUpdate(BaseModel):
     description: Optional[str] = None
     url: Optional[str] = None
     photo_filename: Optional[str] = None
+    
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        return validate_meal_name(v)
+    
+    @field_validator('description')
+    @classmethod
+    def validate_description_field(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        return validate_description(v)
+    
+    @field_validator('url')
+    @classmethod
+    def validate_url_field(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        return validate_url(v)
+    
+    @field_validator('photo_filename')
+    @classmethod
+    def validate_photo_filename(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        return sanitize_filename(v)
 
 
 class MealResponse(MealBase):
