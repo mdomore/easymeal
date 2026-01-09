@@ -1,12 +1,12 @@
 from fastapi import APIRouter, HTTPException, Depends, status, Request
 from sqlalchemy.orm import Session
-import os
 import jwt
 
 from app.database import get_db, User
 from app.auth import get_current_user, get_supabase_client
 from app import schemas
 from app.rate_limit import rate_limit_dependency
+from app.config import SUPABASE_JWT_SECRET
 from app.error_handler import create_safe_http_exception
 
 router = APIRouter(prefix="/api", tags=["auth"])
@@ -119,7 +119,6 @@ async def login(
             )
         
         # Decode token to get user info and create/update easymeal user if needed
-        SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", os.getenv("JWT_SECRET", ""))
         try:
             decoded = jwt.decode(
                 response.session.access_token,

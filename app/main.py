@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import os
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -11,6 +10,7 @@ load_dotenv()
 from app.database import init_db
 from app.storage import ensure_bucket_exists
 from app.routes import auth, meals, static
+from app.config import CORS_ORIGINS
 from alembic.config import Config
 from alembic import command
 
@@ -26,9 +26,8 @@ allowed_origins = [
 ]
 
 # Allow additional origins from environment variable (comma-separated)
-additional_origins = os.getenv("CORS_ORIGINS", "")
-if additional_origins:
-    allowed_origins.extend([origin.strip() for origin in additional_origins.split(",")])
+if CORS_ORIGINS:
+    allowed_origins.extend([origin.strip() for origin in CORS_ORIGINS.split(",")])
 
 app.add_middleware(
     CORSMiddleware,

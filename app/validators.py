@@ -19,12 +19,76 @@ USERNAME_PATTERN = re.compile(r'^[a-zA-Z0-9_-]+$')
 # Allowed URL schemes
 ALLOWED_URL_SCHEMES = {'http', 'https'}
 
+# Allowed HTML tags for rich text descriptions (from Quill editor)
+ALLOWED_HTML_TAGS = {'p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
+                     'ul', 'ol', 'li', 'a', 'blockquote', 'pre', 'code'}
+ALLOWED_HTML_ATTRIBUTES = {'href', 'target', 'rel'}
+
 
 def sanitize_html(text: str) -> str:
-    """Escape HTML characters to prevent XSS attacks"""
+    """Escape HTML characters to prevent XSS attacks (for plain text fields)"""
     if not text:
         return text
     return html.escape(text)
+
+
+def sanitize_rich_html(html_content: str) -> str:
+    """
+    Sanitize rich HTML content to allow safe tags while removing dangerous ones.
+    Used for descriptions that come from Quill editor.
+    """
+    if not html_content:
+        return html_content
+    
+    # Remove script tags and their content
+    html_content = re.sub(r'<script[^>]*>.*?</script>', '', html_content, flags=re.IGNORECASE | re.DOTALL)
+    
+    # Remove event handlers (onclick, onerror, etc.)
+    html_content = re.sub(r'\s*on\w+\s*=\s*["\'][^"\']*["\']', '', html_content, flags=re.IGNORECASE)
+    
+    # Remove javascript: and data: URLs
+    html_content = re.sub(r'javascript:', '', html_content, flags=re.IGNORECASE)
+    html_content = re.sub(r'data:text/html', '', html_content, flags=re.IGNORECASE)
+    
+    # Remove style tags and inline styles
+    html_content = re.sub(r'<style[^>]*>.*?</style>', '', html_content, flags=re.IGNORECASE | re.DOTALL)
+    html_content = re.sub(r'\s*style\s*=\s*["\'][^"\']*["\']', '', html_content, flags=re.IGNORECASE)
+    
+    # Remove dangerous tags but keep allowed ones
+    # First, escape all tags
+    # Then unescape allowed tags
+    # This is a simple approach - for production, consider using a library like bleach
+    
+    # Remove tags that are not in the allowed list
+    allowed_tags_pattern = '|'.join(ALLOWED_HTML_TAGS)
+    # Keep allowed tags, remove others
+    html_content = re.sub(
+        r'</?(?!' + allowed_tags_pattern + r'\b)[^>]+>',
+        '',
+        html_content,
+        flags=re.IGNORECASE
+    )
+    
+    # Clean up attributes on allowed tags - only keep href, target, rel
+    for tag in ALLOWED_HTML_TAGS:
+        # Remove all attributes except allowed ones
+        pattern = rf'<{tag}\s+([^>]*)>'
+        def clean_attrs(match):
+            attrs = match.group(1)
+            # Extract only allowed attributes
+            allowed_attrs = []
+            for attr in ALLOWED_HTML_ATTRIBUTES:
+                attr_pattern = rf'\b{attr}\s*=\s*["\']([^"\']*)["\']'
+                attr_match = re.search(attr_pattern, attrs, re.IGNORECASE)
+                if attr_match:
+                    allowed_attrs.append(f'{attr}="{html.escape(attr_match.group(1))}"')
+            if allowed_attrs:
+                return f'<{tag} {" ".join(allowed_attrs)}>'
+            return f'<{tag}>'
+        
+        html_content = re.sub(pattern, clean_attrs, html_content, flags=re.IGNORECASE)
+    
+    return html_content
 
 
 def validate_username(username: str) -> str:
@@ -77,7 +141,7 @@ def validate_meal_name(name: str) -> str:
 
 
 def validate_description(description: Optional[str]) -> Optional[str]:
-    """Validate and sanitize description"""
+    """Validate and sanitize description (allows safe HTML from Quill editor)"""
     if not description:
         return None
     
@@ -86,8 +150,9 @@ def validate_description(description: Optional[str]) -> Optional[str]:
     if len(description) > DESCRIPTION_MAX_LENGTH:
         raise ValueError(f"Description must be no more than {DESCRIPTION_MAX_LENGTH} characters long")
     
-    # Sanitize HTML to prevent XSS
-    description = sanitize_html(description)
+    # Sanitize HTML to allow safe tags but remove dangerous ones
+    # This allows rich text from Quill editor while preventing XSS
+    description = sanitize_rich_html(description)
     
     return description
 

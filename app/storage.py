@@ -1,13 +1,17 @@
-import os
 from pathlib import Path
 import uuid
 from io import BytesIO
 import requests
 
-# Supabase configuration
-SUPABASE_URL = os.getenv("SUPABASE_URL", "http://supabase-kong:8000")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", os.getenv("SUPABASE_ANON_KEY"))
-SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "photos")
+from app.config import (
+    SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY,
+    SUPABASE_ANON_KEY,
+    SUPABASE_BUCKET
+)
+
+# Use service role key, fallback to anon key if service role not available
+SUPABASE_KEY = SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY
 
 
 def get_headers():
