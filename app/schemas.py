@@ -49,6 +49,7 @@ class UserResponse(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    csrf_token: Optional[str] = None  # CSRF token for state-changing operations
 
 
 # Meal schemas

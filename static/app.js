@@ -1,6 +1,7 @@
 // Ensure API_BASE always uses HTTPS protocol (force HTTPS, never HTTP)
 const API_BASE = `https://${window.location.host}/easymeal/api`;
 let currentToken = null;
+let currentCsrfToken = null;
 let currentUser = null;
 let editingMealId = null;
 let sortOrder = 'asc'; // 'asc' or 'desc'
@@ -10,6 +11,18 @@ let photoRemoved = false; // Track if photo was explicitly removed
 let quillEditor = null; // Quill editor instance
 let currentTab = 'manual'; // Current active tab
 let recipePhotos = []; // Array to store photos: [{filename: "...", is_primary: true, url: "..."}, ...]
+
+// Helper function to build headers with authentication and CSRF token
+function buildAuthHeaders(includeCsrf = true) {
+    const headers = {};
+    if (currentToken) {
+        headers['Authorization'] = `Bearer ${currentToken}`;
+    }
+    if (includeCsrf && currentCsrfToken) {
+        headers['X-CSRF-Token'] = currentCsrfToken;
+    }
+    return headers;
+}
 
 // Tab switching function
 function switchTab(tabName) {
@@ -150,9 +163,7 @@ async function handleImportPhoto(e) {
         
         const response = await fetch(`${API_BASE}/meals/extract-text-from-photo`, {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${currentToken}`
-            },
+            headers: buildAuthHeaders(),
             body: formData
         });
         
@@ -449,8 +460,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     initDarkMode();
     
     const token = localStorage.getItem('token');
+    const csrfToken = localStorage.getItem('csrf_token');
     if (token) {
         currentToken = token;
+        currentCsrfToken = csrfToken;
         await checkAuth();
     } else {
         // No token - show landing page
@@ -582,7 +595,11 @@ async function login() {
         if (response.ok) {
             const data = await response.json();
             currentToken = data.access_token;
+            currentCsrfToken = data.csrf_token || null;
             localStorage.setItem('token', currentToken);
+            if (currentCsrfToken) {
+                localStorage.setItem('csrf_token', currentCsrfToken);
+            }
             console.log('Login successful, token received:', currentToken.substring(0, 20) + '...');
             console.log('Token type:', typeof currentToken, 'Length:', currentToken.length);
             closeAuthModal();
@@ -638,7 +655,11 @@ async function register() {
             if (loginResponse.ok) {
                 const data = await loginResponse.json();
                 currentToken = data.access_token;
+                currentCsrfToken = data.csrf_token || null;
                 localStorage.setItem('token', currentToken);
+                if (currentCsrfToken) {
+                    localStorage.setItem('csrf_token', currentCsrfToken);
+                }
                 console.log('Registration auto-login successful, token received:', currentToken.substring(0, 20) + '...');
                 closeAuthModal();
                 await checkAuth();
@@ -659,8 +680,10 @@ async function register() {
 
 function logout() {
     currentToken = null;
+    currentCsrfToken = null;
     currentUser = null;
     localStorage.removeItem('token');
+    localStorage.removeItem('csrf_token');
     showLandingPage();
     document.getElementById('login-username').value = '';
     document.getElementById('login-password').value = '';
@@ -796,12 +819,11 @@ async function executeAction(action) {
 }
 
 async function createMealOffline(mealData) {
+    const headers = buildAuthHeaders();
+    headers['Content-Type'] = 'application/json';
     const response = await fetch(`${API_BASE}/meals`, {
         method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${currentToken}`,
-            'Content-Type': 'application/json'
-        },
+        headers: headers,
         body: JSON.stringify(mealData)
     });
     
@@ -810,12 +832,11 @@ async function createMealOffline(mealData) {
 }
 
 async function updateMealOffline(mealId, mealData) {
+    const headers = buildAuthHeaders();
+    headers['Content-Type'] = 'application/json';
     const response = await fetch(`${API_BASE}/meals/${mealId}`, {
         method: 'PUT',
-        headers: {
-            'Authorization': `Bearer ${currentToken}`,
-            'Content-Type': 'application/json'
-        },
+        headers: headers,
         body: JSON.stringify(mealData)
     });
     
@@ -826,9 +847,7 @@ async function updateMealOffline(mealId, mealData) {
 async function deleteMealOffline(mealId) {
     const response = await fetch(`${API_BASE}/meals/${mealId}`, {
         method: 'DELETE',
-        headers: {
-            'Authorization': `Bearer ${currentToken}`
-        }
+        headers: buildAuthHeaders()
     });
     
     if (!response.ok) throw new Error('Failed to delete recipe');
@@ -1283,12 +1302,11 @@ async function saveMeal(event) {
             return;
         }
         
+        const headers = buildAuthHeaders();
+        headers['Content-Type'] = 'application/json';
         const response = await fetch(url, {
             method: method,
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${currentToken}`
-            },
+            headers: headers,
             body: JSON.stringify(body)
         });
         
@@ -1363,9 +1381,7 @@ async function confirmDelete() {
         
         const response = await fetch(`${API_BASE}/meals/${mealId}`, {
             method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${currentToken}`
-            }
+            headers: buildAuthHeaders()
         });
         
         if (response.ok || response.status === 204) {

@@ -12,6 +12,7 @@ from app.storage import ensure_bucket_exists
 from app.routes import auth, meals, static
 from app.config import CORS_ORIGINS_LIST, ENVIRONMENT
 from app.security_headers import SecurityHeadersMiddleware
+from app.csrf import CSRFProtectionMiddleware
 from alembic.config import Config
 from alembic import command
 
@@ -22,6 +23,9 @@ app.add_middleware(
     SecurityHeadersMiddleware,
     environment=ENVIRONMENT
 )
+
+# CSRF protection middleware (after security headers, before CORS)
+app.add_middleware(CSRFProtectionMiddleware)
 
 # CORS middleware for frontend integration
 # Restrict to specific origins for security

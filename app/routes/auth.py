@@ -8,6 +8,7 @@ from app import schemas
 from app.rate_limit import rate_limit_dependency
 from app.config import SUPABASE_JWT_SECRET
 from app.error_handler import create_safe_http_exception
+from app.csrf import generate_csrf_token
 from app.security_logging import (
     log_failed_login, log_successful_login,
     log_failed_registration, log_successful_registration,
@@ -165,9 +166,13 @@ async def login(
         # Log successful login
         log_successful_login(request, user_identifier=email)
         
+        # Generate CSRF token for state-changing operations
+        csrf_token = generate_csrf_token()
+        
         return {
             "access_token": response.session.access_token,
-            "token_type": "bearer"
+            "token_type": "bearer",
+            "csrf_token": csrf_token
         }
     except HTTPException as e:
         # Log failed login
