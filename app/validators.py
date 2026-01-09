@@ -111,7 +111,15 @@ def validate_username(username: str) -> str:
 
 
 def validate_password(password: str) -> str:
-    """Validate password length"""
+    """
+    Validate password strength requirements:
+    - Minimum 8 characters
+    - Maximum 128 characters
+    - At least one uppercase letter
+    - At least one lowercase letter
+    - At least one digit
+    - At least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)
+    """
     if not password:
         raise ValueError("Password is required")
     
@@ -120,6 +128,22 @@ def validate_password(password: str) -> str:
     
     if len(password) > PASSWORD_MAX_LENGTH:
         raise ValueError(f"Password must be no more than {PASSWORD_MAX_LENGTH} characters long")
+    
+    # Check for at least one uppercase letter
+    if not re.search(r'[A-Z]', password):
+        raise ValueError("Password must contain at least one uppercase letter")
+    
+    # Check for at least one lowercase letter
+    if not re.search(r'[a-z]', password):
+        raise ValueError("Password must contain at least one lowercase letter")
+    
+    # Check for at least one digit
+    if not re.search(r'\d', password):
+        raise ValueError("Password must contain at least one digit")
+    
+    # Check for at least one special character
+    if not re.search(r'[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]', password):
+        raise ValueError("Password must contain at least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)")
     
     return password
 

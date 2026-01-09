@@ -123,6 +123,9 @@
                     <input type="text" id="register-username" data-i18n-placeholder="auth.username" placeholder="Username" autocomplete="username" required>
                     <input type="email" id="register-email" data-i18n-placeholder="auth.email" placeholder="Email" autocomplete="email" required>
                     <input type="password" id="register-password" data-i18n-placeholder="auth.password" placeholder="Password" autocomplete="new-password" required>
+                    <small class="password-requirements" style="display: block; font-size: 0.85em; color: #666; margin-top: -10px; margin-bottom: 10px;">
+                        Password must be at least 8 characters and include: uppercase, lowercase, digit, and special character
+                    </small>
                     <button type="submit" class="btn-primary" data-i18n="auth.createAccount">Create account</button>
                     <div id="register-error" class="error-message"></div>
                 </form>
