@@ -16,10 +16,8 @@ A Python-based meal recipe application with FastAPI, featuring user authenticati
 
 - `app/` - FastAPI application code
 - `static/` - Frontend files (HTML, CSS, JS)
-- `data/` - Database and user uploads (not in git)
-- `docker-compose.prod.yml` - Production Docker configuration
-- `nginx.conf` - Nginx reverse proxy configuration
-- `HTTPS_SETUP.md` - SSL certificate setup guide
+- `docker-compose.yml` - Docker configuration
+- `nginx.conf` - Nginx reverse proxy configuration (for manual setup)
 
 ## Setup
 
@@ -41,17 +39,14 @@ uvicorn app.main:app --reload
 
 ### Docker Production
 
-1. Set environment variables:
-```bash
-export SECRET_KEY="your-secret-key-here"
-```
+1. Set environment variables in `.env` file or as environment variables
 
 2. Build and run:
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose up -d --build
 ```
 
-3. Set up Nginx and SSL (see `HTTPS_SETUP.md`)
+3. Set up Nginx and SSL (see `nginx.conf` for configuration example)
 
 ## Deployment
 
@@ -59,7 +54,7 @@ The application is configured to run at `micmoe.ddns.net/easymeal/` with:
 - Main landing page at `micmoe.ddns.net`
 - EasyMeal app at `micmoe.ddns.net/easymeal/`
 
-See `DEPLOYMENT.md` and `HTTPS_SETUP.md` for detailed deployment instructions.
+See `nginx.conf` for Nginx reverse proxy configuration example.
 
 ## API Endpoints
 
