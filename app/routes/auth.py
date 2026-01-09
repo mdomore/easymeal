@@ -7,6 +7,7 @@ from app.database import get_db, User
 from app.auth import get_current_user, get_supabase_client
 from app import schemas
 from app.rate_limit import rate_limit_dependency
+from app.error_handler import create_safe_http_exception
 
 router = APIRouter(prefix="/api", tags=["auth"])
 
@@ -66,15 +67,17 @@ async def register(
     except HTTPException:
         raise
     except Exception as e:
-        error_msg = str(e)
-        if "already registered" in error_msg.lower() or "already exists" in error_msg.lower() or "User already registered" in error_msg:
+        error_msg = str(e).lower()
+        if "already registered" in error_msg or "already exists" in error_msg or "user already registered" in error_msg:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered"
             )
-        raise HTTPException(
+        # Use safe error handler to prevent information leakage
+        raise create_safe_http_exception(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Registration failed: {error_msg}"
+            generic_message="Registration failed. Please try again.",
+            error=e
         )
 
 
@@ -153,11 +156,12 @@ async def login(
     except HTTPException:
         raise
     except Exception as e:
-        error_msg = str(e)
-        print(f"Login error: {error_msg}")
-        raise HTTPException(
+        # Use safe error handler - don't expose internal error details
+        # Log server-side for debugging, but return generic message to client
+        raise create_safe_http_exception(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials"
+            generic_message="Invalid credentials",
+            error=e
         )
 
 

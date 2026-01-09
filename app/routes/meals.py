@@ -11,6 +11,7 @@ from app.database import get_db, Meal
 from app.auth import get_current_user
 from app.storage import upload_photo, delete_photo, get_photo_url
 from app import schemas
+from app.error_handler import create_safe_http_exception
 
 router = APIRouter(prefix="/api/meals", tags=["meals"])
 
@@ -154,7 +155,11 @@ async def upload_photo_endpoint(
         filename = upload_photo(file_content, file_ext)
         return {"filename": filename}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to upload photo: {str(e)}")
+        raise create_safe_http_exception(
+            status_code=500,
+            generic_message="Failed to upload photo. Please try again.",
+            error=e
+        )
 
 
 @router.post("/extract-text-from-photo")
@@ -204,9 +209,10 @@ async def extract_text_from_photo(
             "extracted_text": extracted_text
         }
     except Exception as e:
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Failed to process photo: {str(e)}"
+        raise create_safe_http_exception(
+            status_code=500,
+            generic_message="Failed to process photo. Please try again.",
+            error=e
         )
 
 
