@@ -95,7 +95,18 @@ ENVIRONMENT = get_optional_env(
 )
 
 # CORS configuration
-CORS_ORIGINS = get_optional_env(
+# Default allowed origins for local development and production
+CORS_ORIGINS_LIST = [
+    "http://localhost:8000",
+    "http://localhost:3000",
+    "https://micmoe.ddns.net",
+    "http://micmoe.ddns.net",
+]
+
+# Add additional origins from environment variable (comma-separated)
+ADDITIONAL_CORS_ORIGINS = get_optional_env(
     "CORS_ORIGINS",
     description="Additional CORS origins (comma-separated)"
 )
+if ADDITIONAL_CORS_ORIGINS:
+    CORS_ORIGINS_LIST.extend([origin.strip() for origin in ADDITIONAL_CORS_ORIGINS.split(",")])

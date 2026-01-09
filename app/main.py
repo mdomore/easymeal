@@ -10,28 +10,24 @@ load_dotenv()
 from app.database import init_db
 from app.storage import ensure_bucket_exists
 from app.routes import auth, meals, static
-from app.config import CORS_ORIGINS
+from app.config import CORS_ORIGINS_LIST, ENVIRONMENT
+from app.security_headers import SecurityHeadersMiddleware
 from alembic.config import Config
 from alembic import command
 
 app = FastAPI(title="EasyMeal Recipe App", version="1.0.0", root_path="/easymeal")
 
+# Security headers middleware (must be added first to apply to all responses)
+app.add_middleware(
+    SecurityHeadersMiddleware,
+    environment=ENVIRONMENT
+)
+
 # CORS middleware for frontend integration
 # Restrict to specific origins for security
-allowed_origins = [
-    "http://localhost:8000",
-    "http://localhost:3000",
-    "https://micmoe.ddns.net",
-    "http://micmoe.ddns.net",
-]
-
-# Allow additional origins from environment variable (comma-separated)
-if CORS_ORIGINS:
-    allowed_origins.extend([origin.strip() for origin in CORS_ORIGINS.split(",")])
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=CORS_ORIGINS_LIST,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
