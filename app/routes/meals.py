@@ -12,6 +12,7 @@ from app.auth import get_current_user
 from app.storage import upload_photo, delete_photo, get_photo_url
 from app import schemas
 from app.error_handler import create_safe_http_exception
+from app.file_validation import validate_image_file, get_safe_image_extension
 
 router = APIRouter(prefix="/api/meals", tags=["meals"])
 
@@ -133,22 +134,39 @@ async def upload_photo_endpoint(
     current_user: dict = Depends(get_current_user)
 ):
     """Upload a photo for a meal"""
-    # Validate file type
-    if not file.content_type or not file.content_type.startswith('image/'):
-        raise HTTPException(status_code=400, detail="File must be an image")
+    # Check file size first (before reading full content)
+    # Note: FastAPI reads the file, so we validate after reading
     
-    # Check file size
+    # Read file content
     file_content = await file.read()
+    
+    # Validate file size
     if len(file_content) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=413, 
             detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024 * 1024)}MB"
         )
     
-    # Determine file extension
-    file_ext = Path(file.filename).suffix if file.filename else '.jpg'
-    if not file_ext:
-        file_ext = '.jpg'
+    # Validate file is actually an image using magic bytes
+    try:
+        is_valid, detected_mime, detected_ext = validate_image_file(
+            file_content,
+            content_type=file.content_type,
+            filename=file.filename
+        )
+        if not is_valid:
+            raise ValueError("File is not a valid image")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise create_safe_http_exception(
+            status_code=400,
+            generic_message="Invalid image file. Please upload a valid image.",
+            error=e
+        )
+    
+    # Use detected extension from magic bytes (most secure)
+    file_ext = detected_ext or get_safe_image_extension(file_content)
     
     # Upload to Supabase Storage
     try:
@@ -168,16 +186,33 @@ async def extract_text_from_photo(
     current_user: dict = Depends(get_current_user)
 ):
     """Extract text from a photo using OCR and upload the photo"""
-    # Validate file type
-    if not file.content_type or not file.content_type.startswith('image/'):
-        raise HTTPException(status_code=400, detail="File must be an image")
-    
-    # Check file size
+    # Read file content
     file_content = await file.read()
+    
+    # Validate file size
     if len(file_content) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=413, 
             detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024 * 1024)}MB"
+        )
+    
+    # Validate file is actually an image using magic bytes
+    detected_ext = None
+    try:
+        is_valid, detected_mime, detected_ext = validate_image_file(
+            file_content,
+            content_type=file.content_type,
+            filename=file.filename
+        )
+        if not is_valid:
+            raise ValueError("File is not a valid image")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise create_safe_http_exception(
+            status_code=400,
+            generic_message="Invalid image file. Please upload a valid image.",
+            error=e
         )
     
     try:
@@ -199,9 +234,8 @@ async def extract_text_from_photo(
         extracted_text = extracted_text.strip()
         
         # Upload photo to Supabase Storage
-        file_ext = Path(file.filename).suffix if file.filename else '.jpg'
-        if not file_ext:
-            file_ext = '.jpg'
+        # Use detected extension from magic bytes validation (most secure)
+        file_ext = detected_ext or get_safe_image_extension(file_content)
         filename = upload_photo(file_content, file_ext)
         
         return {
