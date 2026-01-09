@@ -65,6 +65,7 @@ async def get_meal(
 
 
 @router.post("/", response_model=schemas.MealResponse, status_code=201)
+@router.post("", response_model=schemas.MealResponse, status_code=201)  # Also handle without trailing slash
 async def create_meal(
     meal: schemas.MealCreate,
     current_user: dict = Depends(get_current_user),

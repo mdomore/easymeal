@@ -17,9 +17,22 @@ from alembic import command
 app = FastAPI(title="EasyMeal Recipe App", version="1.0.0", root_path="/easymeal")
 
 # CORS middleware for frontend integration
+# Restrict to specific origins for security
+allowed_origins = [
+    "http://localhost:8000",
+    "http://localhost:3000",
+    "https://micmoe.ddns.net",
+    "http://micmoe.ddns.net",
+]
+
+# Allow additional origins from environment variable (comma-separated)
+additional_origins = os.getenv("CORS_ORIGINS", "")
+if additional_origins:
+    allowed_origins.extend([origin.strip() for origin in additional_origins.split(",")])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
