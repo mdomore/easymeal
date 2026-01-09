@@ -3,10 +3,15 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from app.storage import get_photo_object
 
-router = APIRouter(tags=["static"])
+# Use a specific prefix to avoid conflicts with StaticFiles mount
+router = APIRouter(prefix="/static/photos", tags=["static"])
+
+# Note: Static files are served via app.mount("/static", ...) in main.py
+# This router only handles photos from Supabase Storage at /static/photos/{filename}
+# Regular static files are served by StaticFiles mount
 
 
-@router.get("/static/photos/{filename}")
+@router.get("/{filename}")
 async def serve_photo(filename: str):
     """Serve photo directly from Supabase Storage"""
     try:
@@ -37,24 +42,7 @@ async def serve_photo(filename: str):
         raise HTTPException(status_code=404, detail="Photo not found")
 
 
-@router.get("/static/sw.js")
-async def serve_service_worker():
-    """Serve service worker with correct content type"""
-    with open("static/sw.js", "r") as f:
-        content = f.read()
-    return Response(
-        content=content,
-        media_type="application/javascript",
-        headers={"Service-Worker-Allowed": "/easymeal/"}
-    )
-
-
-@router.get("/static/manifest.json")
-async def serve_manifest():
-    """Serve manifest.json with correct content type"""
-    return FileResponse("static/manifest.json", media_type="application/manifest+json")
-
-
-@router.get("/")
-async def read_root():
-    return FileResponse("static/index.html")
+# Note: sw.js and manifest.json are served by StaticFiles mount
+# StaticFiles automatically sets correct MIME types
+# If special headers are needed for service worker, we can add a route here
+# For now, StaticFiles handles them correctly
