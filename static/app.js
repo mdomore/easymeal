@@ -46,7 +46,8 @@ function renderPhotosContainer() {
     recipePhotos.forEach((photo, index) => {
         const photoItem = document.createElement('div');
         photoItem.className = `photo-item ${photo.is_primary ? 'primary' : ''}`;
-        const photoUrl = photo.url || (photo.filename ? `static/photos/${photo.filename}` : '');
+        // Include token in URL for image authentication (images can't send Authorization headers)
+        const photoUrl = photo.url || (photo.filename ? `static/photos/${photo.filename}?token=${encodeURIComponent(currentToken || '')}` : '');
         photoItem.innerHTML = `
             ${photoUrl ? `<img src="${photoUrl}" alt="Recipe photo">` : '<div class="photo-placeholder">Photo loading...</div>'}
             <div class="photo-item-actions">
@@ -983,7 +984,8 @@ function displayMeals(meals) {
     
     mealsList.innerHTML = sortedMeals.map(meal => {
         const hasPhoto = meal.photo_filename;
-        const photoUrl = hasPhoto ? `static/photos/${escapeHtml(meal.photo_filename)}` : '';
+        // Include token in URL for image authentication (images can't send Authorization headers)
+        const photoUrl = hasPhoto ? `static/photos/${escapeHtml(meal.photo_filename)}?token=${encodeURIComponent(currentToken || '')}` : '';
         // Strip HTML tags for card preview
         const plainDescription = meal.description ? stripHtml(meal.description) : '';
         const description = plainDescription ? (plainDescription.substring(0, 100) + (plainDescription.length > 100 ? '...' : '')) : '';
@@ -1197,7 +1199,8 @@ function showMealDetails(mealId) {
         const photoSection = document.getElementById('detail-photo-section');
         const photoDiv = document.getElementById('detail-photo');
         if (meal.photo_filename) {
-            const photoUrl = `static/photos/${escapeHtml(meal.photo_filename)}`;
+            // Include token in URL for image authentication (images can't send Authorization headers)
+            const photoUrl = `static/photos/${escapeHtml(meal.photo_filename)}?token=${encodeURIComponent(currentToken || '')}`;
             photoDiv.innerHTML = `<a href="${photoUrl}" target="_blank" rel="noopener noreferrer" class="detail-photo-link"><img src="${photoUrl}" alt="${escapeHtml(meal.name)}" class="detail-photo-image"></a>`;
             photoSection.classList.remove('hidden');
         } else {
