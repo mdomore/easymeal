@@ -1,4 +1,5 @@
-const API_BASE = '/easymeal/api';
+// Ensure API_BASE always uses HTTPS protocol (force HTTPS, never HTTP)
+const API_BASE = `https://${window.location.host}/easymeal/api`;
 let currentToken = null;
 let currentUser = null;
 let editingMealId = null;
@@ -478,35 +479,7 @@ function showLandingPage() {
     document.getElementById('meals-view').classList.add('hidden');
 }
 
-function tryEasyMeal() {
-    // Create temporary account and go to app
-    createTempAccount();
-}
-
-async function createTempAccount() {
-    try {
-        const response = await fetch(`${API_BASE}/temp-account`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            currentToken = data.access_token;
-            localStorage.setItem('token', currentToken);
-            console.log('Temporary account created, token received');
-            await checkAuth();
-        } else {
-            console.error('Failed to create temporary account');
-            alert(window.t ? window.t('messages.failedToStart') : 'Failed to start. Please try again.');
-        }
-    } catch (error) {
-        console.error('Error creating temporary account:', error);
-        alert('Network error. Please try again.');
-    }
-}
+// Temporary account functionality removed - users must register/login
 
 function showAuthModal() {
     document.getElementById('auth-modal').classList.remove('hidden');
@@ -695,83 +668,7 @@ function logout() {
     document.getElementById('register-password').value = '';
 }
 
-// Temporary account functions
-function showTempAccountPrompt() {
-    const banner = document.getElementById('temp-account-banner');
-    if (banner && !localStorage.getItem('temp-banner-dismissed')) {
-        banner.classList.remove('hidden');
-    }
-}
-
-function dismissTempBanner() {
-    const banner = document.getElementById('temp-account-banner');
-    if (banner) {
-        banner.classList.add('hidden');
-        localStorage.setItem('temp-banner-dismissed', 'true');
-    }
-}
-
-function showConvertAccountModal() {
-    const modal = document.getElementById('convert-account-modal');
-    if (modal) {
-        modal.classList.remove('hidden');
-        document.getElementById('convert-error').textContent = '';
-    }
-}
-
-function closeConvertModal() {
-    const modal = document.getElementById('convert-account-modal');
-    if (modal) {
-        modal.classList.add('hidden');
-    }
-}
-
-async function convertAccount(event) {
-    event.preventDefault();
-    
-    const username = document.getElementById('convert-username').value.trim();
-    const email = document.getElementById('convert-email').value.trim();
-    const password = document.getElementById('convert-password').value;
-    const errorDiv = document.getElementById('convert-error');
-    
-    if (!errorDiv) return;
-    
-    errorDiv.textContent = '';
-    
-    if (!username || !email || !password) {
-        errorDiv.textContent = 'Please fill in all fields';
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_BASE}/convert-account`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${currentToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ username, email, password })
-        });
-        
-        if (response.ok) {
-            const userData = await response.json();
-            currentUser = userData;
-            
-            // Hide temp account banner
-            dismissTempBanner();
-            closeConvertModal();
-            
-            // Show success message
-            alert(window.t ? window.t('messages.accountConverted') : 'Account converted successfully! Your recipes are now saved permanently.');
-        } else {
-            const errorData = await response.json().catch(() => ({ detail: 'Conversion failed' }));
-            errorDiv.textContent = errorData.detail || 'Conversion failed';
-        }
-    } catch (error) {
-        console.error('Convert account error:', error);
-        errorDiv.textContent = 'Network error. Please try again.';
-    }
-}
+// Temporary account functions removed - users must register/login
 
 function showMealsView() {
     document.getElementById('landing-view').classList.add('hidden');
@@ -1069,18 +966,6 @@ function displayMeals(meals) {
                     <p class="empty-state-note">${window.t ? window.t('meals.importRecipesNote') : 'Import recipes from photos using OCR, or add them manually'}</p>
                 </div>
             `;
-        if (currentUser && currentUser.is_temporary) {
-            emptyMessage = `
-                <div class="empty-state">
-                    <h2>${window.t ? window.t('meals.welcome') : 'Welcome to EasyMeal!'}</h2>
-                    <p>${window.t ? window.t('meals.tempAccountMessage') : 'You\'re using a temporary account. Start adding recipes, or create a permanent account to save them.'}</p>
-                    <div class="empty-state-actions">
-                        <button onclick="showAddMealForm()" class="btn-primary">${window.t ? window.t('meals.addRecipe') : '+ Add Recipe'}</button>
-                    </div>
-                    <p class="empty-state-note"><a href="#" onclick="showConvertAccountModal(); return false;">${window.t ? window.t('meals.createPermanentAccount') : 'Create a permanent account'}</a> ${window.t ? window.t('meals.createPermanentAccountSuffix') : 'to save your recipes permanently'}</p>
-                </div>
-            `;
-        }
         mealsList.innerHTML = emptyMessage;
         return;
     }

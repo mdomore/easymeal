@@ -1,7 +1,7 @@
 // Service Worker for EasyMeal PWA
-const CACHE_NAME = 'easymeal-v4';
-const STATIC_CACHE = 'easymeal-static-v4';
-const API_CACHE = 'easymeal-api-v4';
+const CACHE_NAME = 'easymeal-v9';
+const STATIC_CACHE = 'easymeal-static-v9';
+const API_CACHE = 'easymeal-api-v9';
 
 // Files to cache on install
 const STATIC_FILES = [
@@ -46,8 +46,30 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   
+  // Ensure HTTPS for all requests (fix mixed content)
+  // This handles both absolute HTTP URLs and relative URLs that resolve to HTTP
+  if (url.protocol === 'http:' && url.hostname === self.location.hostname) {
+    url.protocol = 'https:';
+    // Create new request with HTTPS URL, preserving all request properties
+    const newRequestInit = {
+      method: event.request.method,
+      headers: event.request.headers,
+      mode: event.request.mode,
+      credentials: event.request.credentials,
+      cache: event.request.cache,
+      redirect: event.request.redirect,
+      referrer: event.request.referrer,
+      body: event.request.body,
+      bodyUsed: event.request.bodyUsed,
+      referrerPolicy: event.request.referrerPolicy
+    };
+    const newRequest = new Request(url.toString(), newRequestInit);
+    event.respondWith(fetch(newRequest));
+    return;
+  }
+  
   // Skip cross-origin requests
-  if (url.origin !== location.origin) {
+  if (url.origin !== self.location.origin) {
     return;
   }
   
@@ -75,7 +97,7 @@ self.addEventListener('fetch', (event) => {
               return cachedResponse;
             }
             // Return offline response for API calls
-            if (event.request.headers.get('accept').includes('application/json')) {
+            if (event.request.headers.get('accept') && event.request.headers.get('accept').includes('application/json')) {
               return new Response(
                 JSON.stringify({ error: 'Offline', message: 'You are currently offline' }),
                 {

@@ -38,7 +38,7 @@
                     </button>
                     <div class="nav-actions">
                         <button onclick="showAuthModal()" class="btn-nav-link" data-i18n="landing.signIn">Sign in</button>
-                        <button onclick="tryEasyMeal()" class="btn-nav-primary" data-i18n="landing.tryEasyMeal">Try EasyMeal</button>
+                        <button onclick="showAuthModal()" class="btn-nav-primary" data-i18n="landing.signIn">Sign in</button>
                         <button onclick="toggleLanguage()" class="btn-dark-mode-nav" id="language-switcher-landing" title="Change language">
                             <span id="language-icon-landing">🌐</span>
                         </button>
@@ -65,7 +65,7 @@
                             <span data-i18n="common.toggleDarkMode">Toggle dark mode</span>
                         </button>
                         <button onclick="showAuthModal(); toggleLandingMobileMenu();" class="btn-secondary mobile-menu-btn" data-i18n="landing.signIn">Sign in</button>
-                        <button onclick="tryEasyMeal(); toggleLandingMobileMenu();" class="btn-primary mobile-menu-btn" data-i18n="landing.tryEasyMeal">Try EasyMeal</button>
+                        <button onclick="showAuthModal(); toggleLandingMobileMenu();" class="btn-primary mobile-menu-btn" data-i18n="landing.signIn">Sign in</button>
                     </div>
                 </div>
             </div>
@@ -75,9 +75,9 @@
                     <h1 class="hero-title" data-i18n="landing.heroTitle">Your personal recipe collection.<br>No ads. No clutter.</h1>
                     <p class="hero-subtitle" data-i18n="landing.heroSubtitle">Organize recipes from any source. Access them anywhere. Keep it simple.</p>
                     <div class="hero-cta">
-                        <button onclick="tryEasyMeal()" class="btn-hero-primary" data-i18n="landing.tryFree">Try EasyMeal free</button>
+                        <button onclick="showAuthModal()" class="btn-hero-primary" data-i18n="landing.signIn">Sign in</button>
                         <button id="install-pwa-btn" onclick="installPWA()" class="btn-hero-secondary hidden" data-i18n="landing.installApp">Install App</button>
-                        <p class="hero-note" data-i18n="landing.noCreditCard">No credit card required • Start in seconds</p>
+                        <p class="hero-note" data-i18n="landing.noCreditCard">Free to use • Sign in to get started</p>
                     </div>
                 </section>
 
@@ -186,25 +186,6 @@
                 </div>
                 
                 <div id="meals-list" class="meals-list"></div>
-                
-                <!-- Convert Account Modal -->
-                <div id="convert-account-modal" class="modal hidden">
-                    <div class="modal-content">
-                        <span class="close" onclick="closeConvertModal()">&times;</span>
-                        <h3 data-i18n="modals.convertAccountTitle">Create Permanent Account</h3>
-                        <p data-i18n="modals.convertAccountDesc">Convert your temporary account to save your recipes permanently and access them from any device.</p>
-                        <form id="convert-form" onsubmit="convertAccount(event)">
-                            <input type="text" id="convert-username" data-i18n-placeholder="auth.username" placeholder="Username" autocomplete="username" required>
-                            <input type="email" id="convert-email" data-i18n-placeholder="auth.email" placeholder="Email" autocomplete="email" required>
-                            <input type="password" id="convert-password" data-i18n-placeholder="auth.password" placeholder="Password" autocomplete="new-password" required>
-                            <div id="convert-error" class="error-message"></div>
-                            <div class="modal-actions">
-                                <button type="button" onclick="closeConvertModal()" class="btn-secondary" data-i18n="modals.cancel">Cancel</button>
-                                <button type="submit" class="btn-primary" data-i18n="modals.createAccount">Create Account</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
                 
                 <!-- Meal Details Modal -->
                 <div id="detail-modal" class="modal hidden">

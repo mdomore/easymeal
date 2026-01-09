@@ -3,6 +3,9 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://easymeal:easymeal@localhost:5432/easymeal")
 
