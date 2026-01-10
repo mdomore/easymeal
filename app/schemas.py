@@ -87,7 +87,7 @@ class MealBase(BaseModel):
 
 
 class MealCreate(MealBase):
-    pass
+    photos: Optional[List[dict]] = None  # Array of photo objects: [{"filename": "...", "is_primary": true}, ...]
 
 
 class MealUpdate(BaseModel):
@@ -95,6 +95,7 @@ class MealUpdate(BaseModel):
     description: Optional[str] = None
     url: Optional[str] = None
     photo_filename: Optional[str] = None
+    photos: Optional[List[dict]] = None  # Array of photo objects: [{"filename": "...", "is_primary": true}, ...]
     
     @field_validator('name')
     @classmethod

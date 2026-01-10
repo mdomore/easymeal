@@ -99,16 +99,37 @@ async function addPhoto() {
                 formData.append('file', file);
                 
                 try {
+                    // Build headers with auth and CSRF token
+                    const headers = buildAuthHeaders();
+                    // Don't set Content-Type - let browser set it with boundary for FormData
+                    // But we need to remove Content-Type if it was set
+                    delete headers['Content-Type'];
+                    
                     const response = await fetch(`${API_BASE}/meals/upload-photo`, {
                         method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${currentToken}`
-                        },
+                        headers: headers,
                         body: formData
                     });
                     
                     if (!response.ok) {
-                        throw new Error('Failed to upload photo');
+                        // Try to get error message from response
+                        let errorMessage = `Failed to upload photo (${response.status} ${response.statusText})`;
+                        try {
+                            const error = await response.json();
+                            errorMessage = error.detail || errorMessage;
+                        } catch (e) {
+                            // If response is not JSON, read as text
+                            try {
+                                const text = await response.text();
+                                if (text) {
+                                    errorMessage = `Failed to upload photo: ${text.substring(0, 200)}`;
+                                }
+                            } catch (textError) {
+                                errorMessage = response.statusText || errorMessage;
+                            }
+                        }
+                        console.error('Upload failed:', response.status, errorMessage);
+                        throw new Error(errorMessage);
                     }
                     
                     const data = await response.json();
@@ -121,7 +142,8 @@ async function addPhoto() {
                     });
                 } catch (error) {
                     console.error('Error uploading photo:', error);
-                    alert(window.t ? window.t('messages.failedUploadPhoto') : 'Failed to upload photo');
+                    const errorMessage = error.message || error.toString() || (window.t ? window.t('messages.failedUploadPhoto') : 'Failed to upload photo');
+                    alert(errorMessage);
                 }
             }
             
@@ -161,9 +183,14 @@ async function handleImportPhoto(e) {
         const formData = new FormData();
         formData.append('file', file);
         
+        // Build headers with auth and CSRF token
+        const headers = buildAuthHeaders();
+        // Don't set Content-Type - let browser set it with boundary for FormData
+        delete headers['Content-Type'];
+        
         const response = await fetch(`${API_BASE}/meals/extract-text-from-photo`, {
             method: 'POST',
-            headers: buildAuthHeaders(),
+            headers: headers,
             body: formData
         });
         
@@ -417,7 +444,19 @@ window.addEventListener('resize', () => {
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/easymeal/static/sw.js', { scope: '/easymeal/' })
+        // Only register service worker if we're on HTTPS or localhost
+        const isSecureContext = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        
+        if (!isSecureContext) {
+            console.warn('Service Worker requires HTTPS (or localhost). Skipping registration.');
+            return;
+        }
+        
+        // Use the correct path based on root_path
+        const swPath = '/easymeal/static/sw.js';
+        const swScope = '/easymeal/';
+        
+        navigator.serviceWorker.register(swPath, { scope: swScope })
             .then((registration) => {
                 console.log('Service Worker registered:', registration);
                 console.log('Service Worker scope:', registration.scope);
@@ -451,6 +490,7 @@ if ('serviceWorker' in navigator) {
             })
             .catch((error) => {
                 console.error('Service Worker registration failed:', error);
+                // Don't show error to user - service worker is optional for PWA functionality
             });
     });
 }
@@ -1002,9 +1042,16 @@ function displayMeals(meals) {
     });
     
     mealsList.innerHTML = sortedMeals.map(meal => {
-        const hasPhoto = meal.photo_filename;
+        // Check for photo in photo_filename (backward compatibility) or photos array
+        let photoFilename = meal.photo_filename;
+        if (!photoFilename && meal.photos && Array.isArray(meal.photos) && meal.photos.length > 0) {
+            // Get primary photo or first photo
+            const primaryPhoto = meal.photos.find(p => p.is_primary) || meal.photos[0];
+            photoFilename = primaryPhoto?.filename;
+        }
+        const hasPhoto = !!photoFilename;
         // Include token in URL for image authentication (images can't send Authorization headers)
-        const photoUrl = hasPhoto ? `static/photos/${escapeHtml(meal.photo_filename)}?token=${encodeURIComponent(currentToken || '')}` : '';
+        const photoUrl = hasPhoto ? `static/photos/${escapeHtml(photoFilename)}?token=${encodeURIComponent(currentToken || '')}` : '';
         // Strip HTML tags for card preview
         const plainDescription = meal.description ? stripHtml(meal.description) : '';
         const description = plainDescription ? (plainDescription.substring(0, 100) + (plainDescription.length > 100 ? '...' : '')) : '';
@@ -1214,12 +1261,18 @@ function showMealDetails(mealId) {
     .then(meal => {
         const urlLink = meal.url ? `<a href="${escapeHtml(meal.url)}" target="_blank" rel="noopener noreferrer" class="detail-url">🔗 View Recipe</a>` : '<p class="no-url">No recipe URL provided</p>';
         
-        // Show/hide photo section
+        // Show/hide photo section - check both photo_filename and photos array
         const photoSection = document.getElementById('detail-photo-section');
         const photoDiv = document.getElementById('detail-photo');
-        if (meal.photo_filename) {
+        let photoFilename = meal.photo_filename;
+        if (!photoFilename && meal.photos && Array.isArray(meal.photos) && meal.photos.length > 0) {
+            // Get primary photo or first photo
+            const primaryPhoto = meal.photos.find(p => p.is_primary) || meal.photos[0];
+            photoFilename = primaryPhoto?.filename;
+        }
+        if (photoFilename) {
             // Include token in URL for image authentication (images can't send Authorization headers)
-            const photoUrl = `static/photos/${escapeHtml(meal.photo_filename)}?token=${encodeURIComponent(currentToken || '')}`;
+            const photoUrl = `static/photos/${escapeHtml(photoFilename)}?token=${encodeURIComponent(currentToken || '')}`;
             photoDiv.innerHTML = `<a href="${photoUrl}" target="_blank" rel="noopener noreferrer" class="detail-photo-link"><img src="${photoUrl}" alt="${escapeHtml(meal.name)}" class="detail-photo-image"></a>`;
             photoSection.classList.remove('hidden');
         } else {
@@ -1314,8 +1367,16 @@ async function saveMeal(event) {
             closeMealModal();
             loadMeals(); // Reload all meals from server
         } else {
-            const error = await response.json();
-            alert(error.detail || 'Failed to save meal');
+            // Try to parse JSON error, fallback to status text
+            let errorMessage = 'Failed to save meal';
+            try {
+                const error = await response.json();
+                errorMessage = error.detail || errorMessage;
+            } catch (e) {
+                // If response is not JSON, use status text
+                errorMessage = response.statusText || errorMessage;
+            }
+            alert(errorMessage || 'Failed to save meal');
         }
     } catch (error) {
         console.error('Save meal error:', error);
@@ -1387,8 +1448,16 @@ async function confirmDelete() {
         if (response.ok || response.status === 204) {
             loadMeals(); // Reload all meals from server
         } else {
-            const error = await response.json();
-            alert(error.detail || (window.t ? window.t('messages.failedDeleteMeal') : 'Failed to delete recipe'));
+            // Try to parse JSON error, fallback to status text
+            let errorMessage = 'Failed to delete recipe';
+            try {
+                const error = await response.json();
+                errorMessage = error.detail || errorMessage;
+            } catch (e) {
+                // If response is not JSON, use status text
+                errorMessage = response.statusText || errorMessage;
+            }
+            alert(errorMessage || (window.t ? window.t('messages.failedDeleteMeal') : 'Failed to delete recipe'));
         }
     } catch (error) {
         console.error('Delete recipe error:', error);

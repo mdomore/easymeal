@@ -14,10 +14,17 @@ from app.config import CORS_ORIGINS_LIST, ENVIRONMENT
 from app.security_headers import SecurityHeadersMiddleware
 from app.csrf import CSRFProtectionMiddleware
 from app.cookie_security import SecureCookieMiddleware
+from app.access_logging import AccessLoggingMiddleware
+from app.error_handler import create_safe_http_exception
 from alembic.config import Config
 from alembic import command
+from fastapi import Request, status
+from fastapi.responses import JSONResponse
 
 app = FastAPI(title="EasyMeal Recipe App", version="1.0.0", root_path="/easymeal")
+
+# Access logging middleware (should be early to capture all requests)
+app.add_middleware(AccessLoggingMiddleware)
 
 # Security headers middleware (must be added first to apply to all responses)
 app.add_middleware(
@@ -79,6 +86,7 @@ async def serve_static_file(file_path: str):
     if file_path.endswith(".css"):
         media_type = "text/css"
     elif file_path.endswith(".js"):
+        # Service workers must be served with application/javascript or text/javascript
         media_type = "application/javascript"
     elif file_path.endswith(".html"):
         media_type = "text/html"
@@ -107,6 +115,29 @@ async def read_root():
     """Serve the main index.html page"""
     from fastapi.responses import FileResponse
     return FileResponse("static/index.html")
+
+
+# Global exception handler to ensure all errors return JSON
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Handle all unhandled exceptions and return JSON responses"""
+    from fastapi import HTTPException
+    
+    # If it's already an HTTPException, let FastAPI handle it
+    if isinstance(exc, HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail}
+        )
+    
+    # Log the error
+    print(f"Unhandled exception: {type(exc).__name__}: {exc}", exc_info=True)
+    
+    # Return a safe JSON error response
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "An internal server error occurred. Please try again."}
+    )
 
 
 @app.on_event("startup")

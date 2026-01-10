@@ -46,7 +46,11 @@ async def serve_photo(
     
     try:
         current_user_dict = await get_current_user(token_request, None, db)
-    except Exception:
+    except HTTPException as e:
+        # Re-raise HTTP exceptions (like token expired) with proper detail
+        raise e
+    except Exception as e:
+        print(f"Error authenticating photo request: {e}")
         raise HTTPException(status_code=401, detail="Invalid authentication")
     
     # Security: Verify that the photo belongs to a meal owned by the current user

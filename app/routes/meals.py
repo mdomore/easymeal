@@ -74,19 +74,30 @@ async def create_meal(
     db: Session = Depends(get_db)
 ):
     """Create a new meal"""
-    new_meal = Meal(
-        name=meal.name,
-        description=meal.description,
-        url=meal.url,
-        photo_filename=meal.photo_filename,
-        user_id=current_user["id"]
-    )
-    
-    db.add(new_meal)
-    db.commit()
-    db.refresh(new_meal)
-    
-    return new_meal
+    try:
+        new_meal = Meal(
+            name=meal.name,
+            description=meal.description,
+            url=meal.url,
+            photo_filename=meal.photo_filename,
+            photos=meal.photos,  # Store photos array if provided
+            user_id=current_user["id"]
+        )
+        
+        db.add(new_meal)
+        db.commit()
+        db.refresh(new_meal)
+        
+        return new_meal
+    except Exception as e:
+        # Rollback transaction on error
+        db.rollback()
+        # Use safe error handler to return proper JSON error
+        raise create_safe_http_exception(
+            status_code=500,
+            generic_message="Failed to create meal. Please try again.",
+            error=e
+        )
 
 
 @router.put("/{meal_id}", response_model=schemas.MealResponse)
@@ -97,35 +108,50 @@ async def update_meal(
     db: Session = Depends(get_db)
 ):
     """Update a meal"""
-    db_meal = db.query(Meal).filter(
-        Meal.id == meal_id,
-        Meal.user_id == current_user["id"]
-    ).first()
-    
-    if db_meal is None:
-        raise HTTPException(status_code=404, detail="Meal not found")
-    
-    old_photo_filename = db_meal.photo_filename
-    
-    # Handle photo removal (empty string means remove)
-    if meal.photo_filename == "" and old_photo_filename:
-        delete_photo(old_photo_filename)
-        db_meal.photo_filename = None
-    
-    # Update fields
-    if meal.name is not None:
-        db_meal.name = meal.name
-    if meal.description is not None:
-        db_meal.description = meal.description
-    if meal.url is not None:
-        db_meal.url = meal.url
-    if meal.photo_filename is not None and meal.photo_filename != old_photo_filename:
-        db_meal.photo_filename = meal.photo_filename
-    
-    db.commit()
-    db.refresh(db_meal)
-    
-    return db_meal
+    try:
+        db_meal = db.query(Meal).filter(
+            Meal.id == meal_id,
+            Meal.user_id == current_user["id"]
+        ).first()
+        
+        if db_meal is None:
+            raise HTTPException(status_code=404, detail="Meal not found")
+        
+        old_photo_filename = db_meal.photo_filename
+        
+        # Handle photo removal (empty string means remove)
+        if meal.photo_filename == "" and old_photo_filename:
+            delete_photo(old_photo_filename)
+            db_meal.photo_filename = None
+        
+        # Update fields
+        if meal.name is not None:
+            db_meal.name = meal.name
+        if meal.description is not None:
+            db_meal.description = meal.description
+        if meal.url is not None:
+            db_meal.url = meal.url
+        if meal.photo_filename is not None and meal.photo_filename != old_photo_filename:
+            db_meal.photo_filename = meal.photo_filename
+        if meal.photos is not None:
+            db_meal.photos = meal.photos
+        
+        db.commit()
+        db.refresh(db_meal)
+        
+        return db_meal
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        # Rollback transaction on error
+        db.rollback()
+        # Use safe error handler to return proper JSON error
+        raise create_safe_http_exception(
+            status_code=500,
+            generic_message="Failed to update meal. Please try again.",
+            error=e
+        )
 
 
 @router.post("/upload-photo")
@@ -134,45 +160,58 @@ async def upload_photo_endpoint(
     current_user: dict = Depends(get_current_user)
 ):
     """Upload a photo for a meal"""
-    # Check file size first (before reading full content)
-    # Note: FastAPI reads the file, so we validate after reading
-    
-    # Read file content
-    file_content = await file.read()
-    
-    # Validate file size
-    if len(file_content) > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=413, 
-            detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024 * 1024)}MB"
-        )
-    
-    # Validate file is actually an image using magic bytes
     try:
-        is_valid, detected_mime, detected_ext = validate_image_file(
-            file_content,
-            content_type=file.content_type,
-            filename=file.filename
-        )
-        if not is_valid:
-            raise ValueError("File is not a valid image")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # Check file size first (before reading full content)
+        # Note: FastAPI reads the file, so we validate after reading
+        
+        # Read file content
+        file_content = await file.read()
+        
+        # Validate file size
+        if len(file_content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413, 
+                detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024 * 1024)}MB"
+            )
+        
+        # Validate file is actually an image using magic bytes
+        try:
+            is_valid, detected_mime, detected_ext = validate_image_file(
+                file_content,
+                content_type=file.content_type,
+                filename=file.filename
+            )
+            if not is_valid:
+                raise ValueError("File is not a valid image")
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            raise create_safe_http_exception(
+                status_code=400,
+                generic_message="Invalid image file. Please upload a valid image.",
+                error=e
+            )
+        
+        # Use detected extension from magic bytes (most secure)
+        file_ext = detected_ext or get_safe_image_extension(file_content)
+        
+        # Upload to Supabase Storage
+        try:
+            filename = upload_photo(file_content, file_ext)
+            return {"filename": filename}
+        except Exception as e:
+            print(f"Error uploading photo to Supabase: {e}")
+            raise create_safe_http_exception(
+                status_code=500,
+                generic_message="Failed to upload photo. Please try again.",
+                error=e
+            )
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
-        raise create_safe_http_exception(
-            status_code=400,
-            generic_message="Invalid image file. Please upload a valid image.",
-            error=e
-        )
-    
-    # Use detected extension from magic bytes (most secure)
-    file_ext = detected_ext or get_safe_image_extension(file_content)
-    
-    # Upload to Supabase Storage
-    try:
-        filename = upload_photo(file_content, file_ext)
-        return {"filename": filename}
-    except Exception as e:
+        # Catch any other unexpected errors
+        print(f"Unexpected error in upload_photo_endpoint: {e}")
         raise create_safe_http_exception(
             status_code=500,
             generic_message="Failed to upload photo. Please try again.",
@@ -257,22 +296,53 @@ async def delete_meal(
     db: Session = Depends(get_db)
 ):
     """Delete a meal by ID"""
-    meal = db.query(Meal).filter(
-        Meal.id == meal_id,
-        Meal.user_id == current_user["id"]
-    ).first()
-    
-    if meal is None:
-        raise HTTPException(status_code=404, detail="Meal not found")
-    
-    # Delete photo if exists
-    if meal.photo_filename:
-        delete_photo(meal.photo_filename)
-    
-    db.delete(meal)
-    db.commit()
-    
-    return None
+    try:
+        meal = db.query(Meal).filter(
+            Meal.id == meal_id,
+            Meal.user_id == current_user["id"]
+        ).first()
+        
+        if meal is None:
+            raise HTTPException(status_code=404, detail="Meal not found")
+        
+        # Delete photos - handle both photo_filename and photos array
+        photos_to_delete = []
+        
+        # Add photo_filename if exists
+        if meal.photo_filename:
+            photos_to_delete.append(meal.photo_filename)
+        
+        # Add photos from photos array if exists
+        if meal.photos and isinstance(meal.photos, list):
+            for photo in meal.photos:
+                if isinstance(photo, dict) and photo.get("filename"):
+                    photos_to_delete.append(photo["filename"])
+        
+        # Delete all photos (delete_photo doesn't raise on error)
+        for filename in photos_to_delete:
+            try:
+                delete_photo(filename)
+            except Exception as e:
+                # Log but continue - don't fail meal deletion if photo delete fails
+                print(f"Warning: Failed to delete photo {filename}: {e}")
+        
+        # Delete meal from database
+        db.delete(meal)
+        db.commit()
+        
+        return None
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        # Rollback transaction on error
+        db.rollback()
+        # Use safe error handler to return proper JSON error
+        raise create_safe_http_exception(
+            status_code=500,
+            generic_message="Failed to delete meal. Please try again.",
+            error=e
+        )
 
 
 @router.get("/{meal_id}/photo")
