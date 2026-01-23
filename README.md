@@ -36,6 +36,9 @@ easymeal/
 │   ├── app.js            # JavaScript application
 │   ├── style.css         # Styles
 │   └── i18n/             # Translation files
+├── docs/                  # Documentation
+│   ├── deployment/       # Deployment guides (nginx, etc.)
+│   └── CORS_CONFIGURATION.md  # CORS setup guide
 ├── alembic/              # Database migrations
 ├── docker-compose.yml     # Docker configuration
 ├── Dockerfile            # Container definition
@@ -208,21 +211,39 @@ grep -r "SUPABASE_SERVICE_ROLE_KEY" --exclude-dir=.git --exclude="*.example" .
 docker compose up -d --build
 ```
 
-3. Configure reverse proxy (Nginx) for SSL and domain routing
+3. (Optional) Configure reverse proxy (Nginx) for SSL and domain routing
+   - See `docs/deployment/README.md` for nginx configuration examples
+   - Nginx is **not required** - the app can run standalone
+
+### Standalone Production
+
+Run directly with uvicorn or gunicorn:
+
+```bash
+# With uvicorn
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# With gunicorn (recommended for production)
+pip install gunicorn
+gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+```
 
 ### Environment Variables
 
-Required:
+**Required:**
 - `DATABASE_URL` - PostgreSQL connection string
 - `SUPABASE_URL` - Your Supabase project URL
 - `SUPABASE_SERVICE_ROLE_KEY` - Supabase service role key
 - `SUPABASE_JWT_SECRET` - JWT secret for token validation
 
-Optional:
+**Optional:**
 - `SUPABASE_ANON_KEY` - Supabase anonymous key
 - `SUPABASE_BUCKET` - Storage bucket name (default: `photos`)
 - `ENVIRONMENT` - `development` or `production` (default: `development`)
 - `CORS_ORIGINS` - Additional CORS origins (comma-separated)
+  - **When to use:** Only if you're accessing the API from a different domain than where it's hosted
+  - **Default:** Includes `http://localhost:8000` and `http://localhost:3000` for local development
+  - **Example:** `CORS_ORIGINS=https://yourdomain.com,https://www.yourdomain.com`
 
 ## Security Features
 
