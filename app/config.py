@@ -95,15 +95,14 @@ ENVIRONMENT = get_optional_env(
 )
 
 # CORS configuration
-# Default allowed origins for local development and production
+# Default allowed origins for local development
 CORS_ORIGINS_LIST = [
     "http://localhost:8000",
     "http://localhost:3000",
-    "https://micmoe.ddns.net",
-    "http://micmoe.ddns.net",
 ]
 
-# Add additional origins from environment variable (comma-separated)
+# Add production origins from environment variable (comma-separated)
+# Example: CORS_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
 ADDITIONAL_CORS_ORIGINS = get_optional_env(
     "CORS_ORIGINS",
     description="Additional CORS origins (comma-separated)"

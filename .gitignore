@@ -71,6 +71,7 @@ Thumbs.db
 # Nginx (production configs may contain sensitive info)
 # Server-level nginx config - not part of this repo
 nginx.conf
+*.conf
 micmoe_index.html
 
 # Backup scripts output

@@ -1,9 +1,10 @@
-# Nginx configuration for micmoe.ddns.net with path-based routing
-# Certbot will automatically update this configuration after obtaining certificates
+# Nginx configuration example for path-based routing
+# Copy this to your server and customize with your domain
+# Certbot will automatically update SSL certificate paths after obtaining certificates
 
 server {
     listen 80;
-    server_name micmoe.ddns.net;
+    server_name YOUR_DOMAIN_HERE;
 
     # Allow Let's Encrypt verification
     location /.well-known/acme-challenge/ {
@@ -14,17 +15,16 @@ server {
     location / {
         return 301 https://$host$request_uri;
     }
-
 }
 
 # HTTPS server block
 server {
     listen 443 ssl http2;
-    server_name micmoe.ddns.net;
+    server_name YOUR_DOMAIN_HERE;
 
-    # SSL certificates
-    ssl_certificate /etc/letsencrypt/live/micmoe.ddns.net/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/micmoe.ddns.net/privkey.pem;
+    # SSL certificates (update paths after running certbot)
+    ssl_certificate /etc/letsencrypt/live/YOUR_DOMAIN_HERE/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/YOUR_DOMAIN_HERE/privkey.pem;
 
     # SSL configuration
     ssl_protocols TLSv1.2 TLSv1.3;
@@ -43,11 +43,6 @@ server {
     # Redirect /easymeal to /easymeal/
     location = /easymeal {
         return 301 /easymeal/;
-    }
-
-    # Redirect /groupride to /groupride/
-    location = /groupride {
-        return 301 /groupride/;
     }
 
     # Proxy EasyMeal app to Docker container
@@ -88,19 +83,8 @@ server {
         proxy_http_version 1.1;
     }
 
-    # Proxy GroupRide app to Docker container
-    location /groupride/ {
-        proxy_pass http://127.0.0.1:8001/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Forwarded-Port $server_port;
-    }
-
     # Serve index page for root and other paths
-    root /var/www/micmoe;
+    root /var/www/YOUR_WEB_ROOT;
     index index.html;
 
     location / {
