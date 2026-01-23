@@ -41,6 +41,7 @@ class UserResponse(BaseModel):
     email: Optional[str] = None
     is_temporary: Optional[bool] = None
     is_premium: Optional[bool] = None
+    csrf_token: Optional[str] = None  # Added to ensure frontend has token after auth check
 
     class Config:
         from_attributes = True

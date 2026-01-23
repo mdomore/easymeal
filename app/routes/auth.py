@@ -193,4 +193,11 @@ async def login(
 
 @router.get("/me", response_model=schemas.UserResponse)
 async def get_current_user_info(current_user: dict = Depends(get_current_user)):
-    return current_user
+    # Inject a fresh CSRF token into the response
+    # This ensures that even if the user has a valid JWT (e.g. from localStorage)
+    # but no CSRF token (or an expired/invalid one), they get a new one
+    csrf_token = generate_csrf_token()
+    return {
+        **current_user,
+        "csrf_token": csrf_token
+    }

@@ -577,16 +577,21 @@ async function checkAuth() {
     try {
         const response = await fetch(`${API_BASE}/me`, {
             method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${currentToken}`,
-                'Content-Type': 'application/json'
-            }
+            headers: buildAuthHeaders(false) // GET doesn't need CSRF
         });
         
         console.log('Auth check response status:', response.status);
         
         if (response.ok) {
             currentUser = await response.json();
+            
+            // Update CSRF token if provided in response
+            if (currentUser.csrf_token) {
+                currentCsrfToken = currentUser.csrf_token;
+                localStorage.setItem('csrf_token', currentCsrfToken);
+                console.log('CSRF token refreshed from auth check');
+            }
+            
             console.log('Auth successful, user:', currentUser);
             
             showMealsView();
@@ -953,9 +958,7 @@ function openDB() {
 async function loadMeals() {
     try {
         const response = await fetch(`${API_BASE}/meals`, {
-            headers: {
-                'Authorization': `Bearer ${currentToken}`
-            }
+            headers: buildAuthHeaders(false) // GET doesn't need CSRF
         });
         
         if (response.ok) {
@@ -1132,9 +1135,7 @@ function editMeal(mealId) {
     document.getElementById('modal-title').textContent = window.t ? window.t('modals.editMeal') : 'Edit Recipe';
     
     fetch(`${API_BASE}/meals/${mealId}`, {
-        headers: {
-            'Authorization': `Bearer ${currentToken}`
-        }
+        headers: buildAuthHeaders(false)
     })
     .then(response => response.json())
     .then(meal => {
@@ -1179,11 +1180,11 @@ function editMeal(mealId) {
         // Initialize Quill editor if not already done
         initQuillEditor();
         
-        // Load description into Quill editor
+        // Load description into Quill editor using Quill's clipboard API
         if (meal.description) {
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = meal.description;
-            quillEditor.root.innerHTML = tempDiv.innerHTML;
+            // Convert stored HTML into a Quill Delta to preserve formatting
+            const delta = quillEditor.clipboard.convert(meal.description);
+            quillEditor.setContents(delta);
         } else {
             quillEditor.setContents([]);
         }
@@ -1253,9 +1254,7 @@ function showMealDetails(mealId) {
     });
     
     fetch(`${API_BASE}/meals/${mealId}`, {
-        headers: {
-            'Authorization': `Bearer ${currentToken}`
-        }
+        headers: buildAuthHeaders(false)
     })
     .then(response => response.json())
     .then(meal => {
