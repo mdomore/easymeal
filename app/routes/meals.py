@@ -40,11 +40,8 @@ async def get_meals(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get all meals for the current user"""
-    meals = db.query(Meal).filter(
-        Meal.user_id == current_user["id"]
-    ).order_by(Meal.created_at.desc()).all()
-    
+    """Get all meals"""
+    meals = db.query(Meal).order_by(Meal.created_at.desc()).all()
     return meals
 
 
@@ -55,14 +52,9 @@ async def get_meal(
     db: Session = Depends(get_db)
 ):
     """Get a specific meal by ID"""
-    meal = db.query(Meal).filter(
-        Meal.id == meal_id,
-        Meal.user_id == current_user["id"]
-    ).first()
-    
+    meal = db.query(Meal).filter(Meal.id == meal_id).first()
     if meal is None:
         raise HTTPException(status_code=404, detail="Meal not found")
-    
     return meal
 
 
@@ -80,8 +72,7 @@ async def create_meal(
             description=meal.description,
             url=meal.url,
             photo_filename=meal.photo_filename,
-            photos=meal.photos,  # Store photos array if provided
-            user_id=current_user["id"]
+            photos=meal.photos,
         )
         
         db.add(new_meal)
@@ -109,10 +100,7 @@ async def update_meal(
 ):
     """Update a meal"""
     try:
-        db_meal = db.query(Meal).filter(
-            Meal.id == meal_id,
-            Meal.user_id == current_user["id"]
-        ).first()
+        db_meal = db.query(Meal).filter(Meal.id == meal_id).first()
         
         if db_meal is None:
             raise HTTPException(status_code=404, detail="Meal not found")
@@ -297,10 +285,7 @@ async def delete_meal(
 ):
     """Delete a meal by ID"""
     try:
-        meal = db.query(Meal).filter(
-            Meal.id == meal_id,
-            Meal.user_id == current_user["id"]
-        ).first()
+        meal = db.query(Meal).filter(Meal.id == meal_id).first()
         
         if meal is None:
             raise HTTPException(status_code=404, detail="Meal not found")
@@ -354,10 +339,7 @@ async def get_meal_photo(
     """Get meal photo URL"""
     from fastapi.responses import RedirectResponse
     
-    meal = db.query(Meal).filter(
-        Meal.id == meal_id,
-        Meal.user_id == current_user["id"]
-    ).first()
+    meal = db.query(Meal).filter(Meal.id == meal_id).first()
     
     if not meal or not meal.photo_filename:
         raise HTTPException(status_code=404, detail="Photo not found")

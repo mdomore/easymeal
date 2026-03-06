@@ -9,13 +9,12 @@ load_dotenv()
 
 from app.database import init_db
 from app.storage import ensure_bucket_exists
-from app.routes import auth, meals, static
-from app.config import CORS_ORIGINS_LIST, ENVIRONMENT
+from app.routes import meals, static
+from app.config import CORS_ORIGINS_LIST, ENVIRONMENT, DISABLE_AUTH
 from app.security_headers import SecurityHeadersMiddleware
 from app.csrf import CSRFProtectionMiddleware
 from app.cookie_security import SecureCookieMiddleware
 from app.access_logging import AccessLoggingMiddleware
-from app.error_handler import create_safe_http_exception
 from alembic.config import Config
 from alembic import command
 from fastapi import Request, status
@@ -51,8 +50,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers first (router routes take precedence)
-app.include_router(auth.router)
+# Include routers (no auth router; app runs without users)
 app.include_router(meals.router)
 app.include_router(static.router)  # Has /static/photos/{filename} route
 
@@ -107,7 +105,12 @@ async def serve_static_file(file_path: str):
     elif file_path.endswith(".woff") or file_path.endswith(".woff2"):
         media_type = "font/woff" if file_path.endswith(".woff") else "font/woff2"
     
-    return FileResponse(full_path, media_type=media_type)
+    # Allow the service worker at /easymeal/static/sw.js to control /easymeal/
+    headers = {}
+    if file_path == "sw.js":
+        headers["Service-Worker-Allowed"] = "/easymeal/"
+    
+    return FileResponse(full_path, media_type=media_type, headers=headers)
 
 
 @app.get("/")
@@ -131,7 +134,8 @@ async def global_exception_handler(request: Request, exc: Exception):
         )
     
     # Log the error
-    print(f"Unhandled exception: {type(exc).__name__}: {exc}", exc_info=True)
+    import traceback
+    traceback.print_exc()
     
     # Return a safe JSON error response
     return JSONResponse(
@@ -150,12 +154,16 @@ async def startup_event():
         print("Database migrations completed successfully")
     except Exception as e:
         print(f"Warning: Could not run migrations: {e}")
-        print("Falling back to init_db()")
-        # Fallback to init_db if migrations fail (for backward compatibility)
         try:
             init_db()
         except Exception as init_error:
             print(f"Warning: Could not initialize database: {init_error}")
+    if DISABLE_AUTH:
+        # Ensure tables exist (initial migration may be empty)
+        try:
+            init_db()
+        except Exception as e:
+            print(f"Warning: init_db (DISABLE_AUTH): {e}")
     
     # Initialize Supabase Storage bucket
     try:

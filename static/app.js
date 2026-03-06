@@ -1,5 +1,8 @@
-// Ensure API_BASE always uses HTTPS protocol (force HTTPS, never HTTP)
-const API_BASE = `https://${window.location.host}/easymeal/api`;
+// API base: use /easymeal/api when app is under /easymeal, else /api (e.g. local Docker at root)
+const API_BASE = (() => {
+    const path = window.location.pathname.startsWith('/easymeal') ? '/easymeal/api' : '/api';
+    return `${window.location.origin}${path}`;
+})();
 let currentToken = null;
 let currentCsrfToken = null;
 let currentUser = null;
@@ -454,7 +457,8 @@ if ('serviceWorker' in navigator) {
         
         // Use the correct path based on root_path
         const swPath = '/easymeal/static/sw.js';
-        const swScope = '/easymeal/';
+        // Scope must be under the Service Worker script path directory (/easymeal/static/)
+        const swScope = '/easymeal/static/';
         
         navigator.serviceWorker.register(swPath, { scope: swScope })
             .then((registration) => {
@@ -495,7 +499,7 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-// Check if user is already logged in
+// Check if user is already logged in (or run in no-login mode: show recipes directly)
 window.addEventListener('DOMContentLoaded', async () => {
     initDarkMode();
     
@@ -506,8 +510,8 @@ window.addEventListener('DOMContentLoaded', async () => {
         currentCsrfToken = csrfToken;
         await checkAuth();
     } else {
-        // No token - show landing page
-        showLandingPage();
+        // No token: show recipes view and load meals (backend may allow unauthenticated when DISABLE_AUTH)
+        showMealsView();
     }
     
     // Show install prompt if available
@@ -743,6 +747,11 @@ function showMealsView() {
     document.getElementById('landing-view').classList.add('hidden');
     document.getElementById('auth-modal').classList.add('hidden');
     document.getElementById('meals-view').classList.remove('hidden');
+    
+    // Hide logout when no token (no-login / DISABLE_AUTH mode)
+    document.querySelectorAll('#meals-view button[onclick="logout()"]').forEach(el => {
+        el.style.display = currentToken ? '' : 'none';
+    });
     
     // Close mobile menu if open
     const overlay = document.getElementById('mobile-menu-overlay');

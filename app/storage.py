@@ -7,11 +7,24 @@ from app.config import (
     SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY,
     SUPABASE_ANON_KEY,
-    SUPABASE_BUCKET
+    SUPABASE_BUCKET,
+    DISABLE_AUTH,
+    LOCAL_PHOTOS_PATH,
 )
 
 # Use service role key, fallback to anon key if service role not available
-SUPABASE_KEY = SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY
+SUPABASE_KEY = (SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY) if not DISABLE_AUTH else None
+
+# Local photos directory for DISABLE_AUTH mode
+_local_photos_dir: Path = None
+
+
+def _get_local_photos_dir() -> Path:
+    global _local_photos_dir
+    if _local_photos_dir is None:
+        _local_photos_dir = Path(LOCAL_PHOTOS_PATH or "data/photos")
+        _local_photos_dir.mkdir(parents=True, exist_ok=True)
+    return _local_photos_dir
 
 
 def get_headers():
@@ -23,7 +36,9 @@ def get_headers():
 
 
 def ensure_bucket_exists():
-    """Create bucket if it doesn't exist"""
+    """Create bucket if it doesn't exist (no-op when using local storage)."""
+    if DISABLE_AUTH:
+        return
     try:
         # Check if bucket exists
         response = requests.get(
@@ -97,9 +112,7 @@ def optimize_image(image_data: bytes, max_width: int = 1920, max_height: int = 1
 
 
 def upload_photo(file_content: bytes, file_extension: str = ".jpg") -> str:
-    """Upload photo to Supabase Storage and return filename (with optimization)"""
-    ensure_bucket_exists()
-    
+    """Upload photo to Supabase Storage or local disk and return filename (with optimization)."""
     # Optimize image before uploading
     try:
         optimized_content = optimize_image(file_content)
@@ -112,27 +125,27 @@ def upload_photo(file_content: bytes, file_extension: str = ".jpg") -> str:
     except Exception as e:
         print(f"Warning: Image optimization failed, using original: {e}")
     
-    # Generate unique filename
     filename = f"{uuid.uuid4()}{file_extension}"
     
+    if DISABLE_AUTH:
+        photos_dir = _get_local_photos_dir()
+        path = photos_dir / filename
+        path.write_bytes(file_content)
+        return filename
+    
+    ensure_bucket_exists()
     try:
-        # Content type is always JPEG after optimization
         content_type = "image/jpeg"
-        
-        # Upload to Supabase Storage
         headers = get_headers()
         headers["Content-Type"] = content_type
         headers["x-upsert"] = "false"
-        
         response = requests.post(
             f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{filename}",
             headers=headers,
             data=file_content
         )
-        
         if response.status_code not in [200, 201]:
             raise Exception(f"Upload error: {response.status_code} - {response.text}")
-        
         return filename
     except Exception as e:
         print(f"Error uploading photo: {e}")
@@ -140,49 +153,51 @@ def upload_photo(file_content: bytes, file_extension: str = ".jpg") -> str:
 
 
 def get_photo_object(filename: str):
-    """Get photo object from Supabase Storage"""
+    """Get photo object from Supabase Storage or local disk."""
+    if DISABLE_AUTH:
+        photos_dir = _get_local_photos_dir()
+        path = photos_dir / filename
+        if not path.is_file():
+            raise FileNotFoundError(f"Photo not found: {filename}")
+        return BytesIO(path.read_bytes())
     try:
-        # Download file from Supabase Storage
         response = requests.get(
             f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{filename}",
             headers=get_headers()
         )
-        
         if response.status_code == 200:
             return BytesIO(response.content)
-        else:
-            raise Exception(f"Download error: {response.status_code} - {response.text}")
+        raise Exception(f"Download error: {response.status_code} - {response.text}")
     except Exception as e:
         print(f"Error getting photo: {e}")
         raise
 
 
 def delete_photo(filename: str):
-    """Delete photo from Supabase Storage"""
+    """Delete photo from Supabase Storage or local disk."""
+    if DISABLE_AUTH:
+        photos_dir = _get_local_photos_dir()
+        path = photos_dir / filename
+        if path.is_file():
+            path.unlink(missing_ok=True)
+        return
     try:
-        response = requests.delete(
+        requests.delete(
             f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{filename}",
             headers=get_headers()
         )
-        # Don't raise on error - photo might not exist
     except Exception as e:
         print(f"Error deleting photo: {e}")
-        # Don't raise - photo might not exist
 
 
 def get_photo_url(filename: str, expires_in_seconds: int = 3600) -> str:
-    """Get public URL for photo from Supabase Storage"""
+    """Get public URL for photo. When DISABLE_AUTH, returns app-relative path for router to serve."""
+    if DISABLE_AUTH:
+        # Served by app at /static/photos/{filename}?token=...
+        return f"/static/photos/{filename}"
     try:
-        # For public buckets, we can construct the URL directly
-        # Format: {SUPABASE_URL}/storage/v1/object/public/{bucket}/{filename}
-        
-        # Remove trailing slash from URL if present
         base_url = SUPABASE_URL.rstrip('/')
-        
-        # Construct public URL
-        public_url = f"{base_url}/storage/v1/object/public/{SUPABASE_BUCKET}/{filename}"
-        
-        return public_url
+        return f"{base_url}/storage/v1/object/public/{SUPABASE_BUCKET}/{filename}"
     except Exception as e:
         print(f"Error generating photo URL: {e}")
         raise

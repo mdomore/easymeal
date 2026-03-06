@@ -23,6 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY ./app /app/app
 COPY ./static /app/static
+COPY run_local.py /app/run_local.py
 
 EXPOSE 8000
 

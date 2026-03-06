@@ -53,16 +53,22 @@ DATABASE_URL = get_required_env(
     "Database connection URL (e.g., postgresql://user:pass@host:port/dbname)"
 )
 
-# Supabase configuration
-SUPABASE_URL = get_required_env(
-    "SUPABASE_URL",
-    "Supabase API URL"
-)
+# When True, no login is required; all users share a single "local" user (for local Docker deployment).
+DISABLE_AUTH = (os.getenv("DISABLE_AUTH", "").lower() in ("1", "true", "yes"))
 
-SUPABASE_SERVICE_ROLE_KEY = get_required_env(
-    "SUPABASE_SERVICE_ROLE_KEY",
-    "Supabase service role key (required for admin operations)"
-)
+# Supabase configuration (optional when DISABLE_AUTH)
+SUPABASE_URL = None
+if not DISABLE_AUTH:
+    SUPABASE_URL = get_required_env("SUPABASE_URL", "Supabase API URL")
+
+SUPABASE_SERVICE_ROLE_KEY = None
+if not DISABLE_AUTH:
+    SUPABASE_SERVICE_ROLE_KEY = get_required_env(
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "Supabase service role key (required for admin operations)"
+    )
+else:
+    SUPABASE_SERVICE_ROLE_KEY = get_optional_env("SUPABASE_SERVICE_ROLE_KEY")
 
 SUPABASE_ANON_KEY = get_optional_env(
     "SUPABASE_ANON_KEY",
@@ -71,8 +77,7 @@ SUPABASE_ANON_KEY = get_optional_env(
 
 # JWT secret - try SUPABASE_JWT_SECRET first, then JWT_SECRET, then use service role key as fallback
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET") or os.getenv("JWT_SECRET")
-if not SUPABASE_JWT_SECRET:
-    # If neither is set, use service role key (but warn if service role key is also not set)
+if not DISABLE_AUTH and not SUPABASE_JWT_SECRET:
     SUPABASE_JWT_SECRET = SUPABASE_SERVICE_ROLE_KEY
     if not SUPABASE_JWT_SECRET:
         raise ValueError(
@@ -86,6 +91,9 @@ SUPABASE_BUCKET = get_optional_env(
     default="photos",
     description="Supabase Storage bucket name"
 )
+
+# Local photos directory when DISABLE_AUTH (no Supabase). Default: ./data/photos
+LOCAL_PHOTOS_PATH = get_optional_env("LOCAL_PHOTOS_PATH", default="data/photos", description="Local photos directory when not using Supabase")
 
 # Application configuration
 ENVIRONMENT = get_optional_env(

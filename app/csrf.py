@@ -84,8 +84,8 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
     since they don't require authentication and CSRF is less relevant.
     """
     
-    # Public endpoints that don't require CSRF protection
-    PUBLIC_ENDPOINTS = {"/api/register", "/api/login"}
+    # Public endpoints that don't require CSRF protection (none when auth disabled)
+    PUBLIC_ENDPOINTS: set = set()
     
     async def dispatch(self, request: Request, call_next):
         # Skip CSRF check for safe methods (GET, HEAD, OPTIONS)

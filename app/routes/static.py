@@ -6,6 +6,7 @@ from typing import Optional
 from app.storage import get_photo_object
 from app.database import get_db, Meal
 from app.auth import get_current_user, _get_token_from_request
+from app.config import DISABLE_AUTH
 
 # Use a specific prefix to avoid conflicts with StaticFiles mount
 router = APIRouter(prefix="/static/photos", tags=["static"])
@@ -23,52 +24,32 @@ async def serve_photo(
     db: Session = Depends(get_db)
 ):
     """
-    Serve photo directly from Supabase Storage.
-    Requires authentication and verifies photo ownership.
-    Supports authentication via Authorization header or token query parameter (for images).
+    Serve photo from storage. Verifies photo belongs to a meal.
+    When DISABLE_AUTH, no token required. Otherwise requires auth.
     """
-    # Get token from header or query parameter (for image requests that can't send headers)
-    auth_token = _get_token_from_request(request) or token
-    
-    if not auth_token:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    # Verify token and get user
-    # Create a request-like object with the token for authentication
-    class TokenRequest:
-        def __init__(self, token, original_request):
-            self.headers = {"Authorization": f"Bearer {token}"}
-            self.cookies = {}
-            self.client = original_request.client
-            self.url = original_request.url
-    
-    token_request = TokenRequest(auth_token, request)
-    
-    try:
-        current_user_dict = await get_current_user(token_request, None, db)
-    except HTTPException as e:
-        # Re-raise HTTP exceptions (like token expired) with proper detail
-        raise e
-    except Exception as e:
-        print(f"Error authenticating photo request: {e}")
-        raise HTTPException(status_code=401, detail="Invalid authentication")
-    
-    # Security: Verify that the photo belongs to a meal owned by the current user
-    # First check photo_filename field (most common case)
-    meal_by_filename = db.query(Meal).filter(
-        Meal.photo_filename == filename,
-        Meal.user_id == current_user_dict["id"]
-    ).first()
-    
-    if meal_by_filename:
-        # Photo found via photo_filename - access granted
-        pass
-    else:
-        # Check photos JSON array for all user's meals
-        # Note: JSON queries are database-specific, so we check in Python for portability
-        meals = db.query(Meal).filter(Meal.user_id == current_user_dict["id"]).all()
+    if not DISABLE_AUTH:
+        auth_token = _get_token_from_request(request) or token
+        if not auth_token:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        class TokenRequest:
+            def __init__(self, tok, original_request):
+                self.headers = {"Authorization": f"Bearer {tok}"}
+                self.cookies = {}
+                self.client = original_request.client
+                self.url = original_request.url
+        try:
+            await get_current_user(TokenRequest(auth_token, request), None)
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            print(f"Error authenticating photo request: {e}")
+            raise HTTPException(status_code=401, detail="Invalid authentication")
+
+    # Verify that the photo belongs to a meal
+    meal_by_filename = db.query(Meal).filter(Meal.photo_filename == filename).first()
+    if not meal_by_filename:
+        meals = db.query(Meal).all()
         photo_found = False
-        
         for meal in meals:
             if meal.photos and isinstance(meal.photos, list):
                 for photo in meal.photos:
@@ -77,9 +58,8 @@ async def serve_photo(
                         break
             if photo_found:
                 break
-        
         if not photo_found:
-            raise HTTPException(status_code=403, detail="Access denied: Photo not owned by user")
+            raise HTTPException(status_code=403, detail="Access denied: Photo not found")
     
     try:
         # Get photo from Supabase Storage

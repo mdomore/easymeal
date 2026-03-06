@@ -1,0 +1,24 @@
+# Local Docker deployment: no login, recipes only. No Supabase. SQLite DB in ./data.
+# Usage: docker compose -f docker-compose.local.yml up --build
+# Then open http://localhost:8010/easymeal/
+
+services:
+  api:
+    build: .
+    ports:
+      - "127.0.0.1:8010:8000"
+    volumes:
+      - ./data:/app/data
+      - ./app:/app/app
+      - ./static:/app/static
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+    environment:
+      DATABASE_URL: sqlite:////app/data/easymeal.db
+      DISABLE_AUTH: "true"
+      LOCAL_PHOTOS_PATH: /app/data/photos
+      ENVIRONMENT: development
+      CORS_ORIGINS: "http://localhost:8010,http://127.0.0.1:8010"
+      SUPABASE_JWT_SECRET: "local-dummy-secret"
+    command: ["uvicorn", "run_local:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
