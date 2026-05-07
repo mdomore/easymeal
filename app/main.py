@@ -107,7 +107,11 @@ async def serve_static_file(file_path: str):
     elif file_path.endswith(".woff") or file_path.endswith(".woff2"):
         media_type = "font/woff" if file_path.endswith(".woff") else "font/woff2"
     
-    return FileResponse(full_path, media_type=media_type)
+    response = FileResponse(full_path, media_type=media_type)
+    # Allow the service worker at /easymeal/static/sw.js to control scope /easymeal/
+    if file_path == "sw.js":
+        response.headers["Service-Worker-Allowed"] = "/easymeal/"
+    return response
 
 
 @app.get("/")

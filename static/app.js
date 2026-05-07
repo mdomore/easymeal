@@ -8,7 +8,6 @@ let sortOrder = 'asc'; // 'asc' or 'desc'
 let allMeals = []; // Store all meals for filtering
 let originalMealPhoto = null; // Track original photo when editing starts
 let photoRemoved = false; // Track if photo was explicitly removed
-let quillEditor = null; // Quill editor instance
 let currentTab = 'manual'; // Current active tab
 let recipePhotos = []; // Array to store photos: [{filename: "...", is_primary: true, url: "..."}, ...]
 
@@ -222,13 +221,13 @@ async function handleImportPhoto(e) {
         document.getElementById('meal-name').value = '';
         document.getElementById('meal-url').value = '';
         
-        // Initialize Quill editor if not already done
-        initQuillEditor();
-        
         // Populate description with extracted text
+        const descriptionEditor = document.getElementById('meal-description-editor');
         if (data.extracted_text && data.extracted_text.trim()) {
             const text = data.extracted_text.trim();
-            quillEditor.setText(text);
+            if (descriptionEditor) {
+                descriptionEditor.value = text;
+            }
             
             // Try to extract a name from the first line
             const firstLine = text.split('\n')[0].trim();
@@ -263,25 +262,140 @@ function stripHtml(html) {
     return tmp.textContent || tmp.innerText || '';
 }
 
-// Initialize Quill editor
-function initQuillEditor() {
-    if (quillEditor) {
-        return; // Already initialized
+function hasHtmlTags(text) {
+    return /<\s*[a-z][^>]*>/i.test(text || '');
+}
+
+function getDescriptionEditor() {
+    return document.getElementById('meal-description-editor');
+}
+
+function applySimpleBold() {
+    const editor = getDescriptionEditor();
+    if (!editor) return;
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    const selectedText = editor.value.slice(start, end);
+    const wrapped = `**${selectedText || 'bold text'}**`;
+    editor.setRangeText(wrapped, start, end, 'end');
+    editor.focus();
+}
+
+function applySimpleBullet() {
+    const editor = getDescriptionEditor();
+    if (!editor) return;
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    const selectedText = editor.value.slice(start, end);
+
+    if (!selectedText) {
+        editor.setRangeText('- ', start, end, 'end');
+        editor.focus();
+        return;
     }
-    
-    quillEditor = new Quill('#quill-editor', {
-        theme: 'snow',
-        modules: {
-            toolbar: [
-                [{ 'header': [1, 2, 3, false] }],
-                ['bold', 'italic', 'underline'],
-                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                ['link'],
-                ['clean']
-            ]
-        },
-        placeholder: window.t ? window.t('modals.descriptionOptional') : 'Description (optional)'
+
+    const bulleted = selectedText
+        .split('\n')
+        .map(line => line.trim() ? `- ${line.replace(/^-+\s*/, '')}` : line)
+        .join('\n');
+    editor.setRangeText(bulleted, start, end, 'end');
+    editor.focus();
+}
+
+function escapeHtmlText(text) {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function formatInlineBold(line) {
+    return line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+}
+
+function simpleDescriptionTextToHtml(text) {
+    if (!text || !text.trim()) return null;
+    const lines = text.split('\n');
+    const htmlParts = [];
+    let listBuffer = [];
+    let paragraphBuffer = [];
+
+    function flushParagraph() {
+        if (paragraphBuffer.length > 0) {
+            const joined = paragraphBuffer.join('<br>');
+            htmlParts.push(`<p>${joined}</p>`);
+            paragraphBuffer = [];
+        }
+    }
+
+    function flushList() {
+        if (listBuffer.length > 0) {
+            htmlParts.push(`<ul>${listBuffer.join('')}</ul>`);
+            listBuffer = [];
+        }
+    }
+
+    lines.forEach(rawLine => {
+        const escapedLine = escapeHtmlText(rawLine.trim());
+        const bulletMatch = escapedLine.match(/^- (.+)$/);
+        if (bulletMatch) {
+            flushParagraph();
+            listBuffer.push(`<li>${formatInlineBold(bulletMatch[1])}</li>`);
+            return;
+        }
+
+        flushList();
+        if (!escapedLine) {
+            flushParagraph();
+            return;
+        }
+        paragraphBuffer.push(formatInlineBold(escapedLine));
     });
+
+    flushParagraph();
+    flushList();
+
+    return htmlParts.join('');
+}
+
+function simpleDescriptionHtmlToText(html) {
+    if (!html || !html.trim()) return '';
+
+    let normalized = html;
+    normalized = normalized.replace(/<\s*strong\s*>(.*?)<\s*\/\s*strong\s*>/gi, '**$1**');
+    normalized = normalized.replace(/<\s*b\s*>(.*?)<\s*\/\s*b\s*>/gi, '**$1**');
+    normalized = normalized.replace(/<\s*br\s*\/?>/gi, '\n');
+    normalized = normalized.replace(/<\s*li\s*>(.*?)<\s*\/\s*li\s*>/gi, '- $1\n');
+    normalized = normalized.replace(/<\s*\/?\s*ul\s*>/gi, '\n');
+    normalized = normalized.replace(/<\s*\/?\s*ol\s*>/gi, '\n');
+    normalized = normalized.replace(/<\s*\/?\s*p\s*>/gi, '\n');
+
+    const tmp = document.createElement('div');
+    tmp.innerHTML = normalized;
+    return (tmp.textContent || tmp.innerText || '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+function markdownDescriptionToPlainText(text) {
+    if (!text) return '';
+    return text
+        .replace(/\*\*(.+?)\*\*/g, '$1')
+        .replace(/^\s*[-*]\s+/gm, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+function renderDescriptionForDisplay(description) {
+    if (!description || !description.trim()) {
+        return '<p>No description</p>';
+    }
+
+    if (hasHtmlTags(description)) {
+        return description;
+    }
+
+    return simpleDescriptionTextToHtml(description) || `<p>${escapeHtml(description)}</p>`;
 }
 
 // Dark mode functions
@@ -396,6 +510,8 @@ function updateLanguageButtonText() {
 // Expose functions globally
 window.toggleLanguage = toggleLanguage;
 window.updateLanguageButtonText = updateLanguageButtonText;
+window.applySimpleBold = applySimpleBold;
+window.applySimpleBullet = applySimpleBullet;
 
 function syncMobileLanguageSwitcher() {
     updateLanguageButtonText();
@@ -1055,8 +1171,11 @@ function displayMeals(meals) {
         const hasPhoto = !!photoFilename;
         // Include token in URL for image authentication (images can't send Authorization headers)
         const photoUrl = hasPhoto ? `static/photos/${escapeHtml(photoFilename)}?token=${encodeURIComponent(currentToken || '')}` : '';
-        // Strip HTML tags for card preview
-        const plainDescription = meal.description ? stripHtml(meal.description) : '';
+        const plainDescription = meal.description
+            ? (hasHtmlTags(meal.description)
+                ? stripHtml(meal.description)
+                : markdownDescriptionToPlainText(meal.description))
+            : '';
         const description = plainDescription ? (plainDescription.substring(0, 100) + (plainDescription.length > 100 ? '...' : '')) : '';
         
         return `
@@ -1105,9 +1224,10 @@ function showAddMealForm() {
         importPhotoInput.onchange = handleImportPhoto;
     }
     
-    // Initialize Quill editor if not already done
-    initQuillEditor();
-    quillEditor.setContents([]); // Clear editor content
+    const descriptionEditor = getDescriptionEditor();
+    if (descriptionEditor) {
+        descriptionEditor.value = '';
+    }
     
     document.getElementById('meal-modal').classList.remove('hidden');
 }
@@ -1177,16 +1297,11 @@ function editMeal(mealId) {
             importPhotoInput.onchange = handleImportPhoto;
         }
         
-        // Initialize Quill editor if not already done
-        initQuillEditor();
-        
-        // Load description into Quill editor using Quill's clipboard API
-        if (meal.description) {
-            // Convert stored HTML into a Quill Delta to preserve formatting
-            const delta = quillEditor.clipboard.convert(meal.description);
-            quillEditor.setContents(delta);
-        } else {
-            quillEditor.setContents([]);
+        const descriptionEditor = getDescriptionEditor();
+        if (descriptionEditor) {
+            descriptionEditor.value = hasHtmlTags(meal.description || '')
+                ? simpleDescriptionHtmlToText(meal.description || '')
+                : (meal.description || '');
         }
         
         document.getElementById('meal-modal').classList.remove('hidden');
@@ -1279,8 +1394,7 @@ function showMealDetails(mealId) {
         }
         
         document.getElementById('detail-name').textContent = meal.name;
-        // Display HTML content from description
-        const descriptionHtml = meal.description || '<p>No description</p>';
+        const descriptionHtml = renderDescriptionForDisplay(meal.description || '');
         document.getElementById('detail-description').innerHTML = descriptionHtml;
         document.getElementById('detail-url').innerHTML = urlLink;
         document.getElementById('detail-date').textContent = new Date(meal.created_at).toLocaleString();
@@ -1300,9 +1414,9 @@ async function saveMeal(event) {
     event.preventDefault();
     
     const name = document.getElementById('meal-name').value;
-    // Get HTML content from Quill editor
-    initQuillEditor(); // Ensure editor is initialized
-    const description = quillEditor.root.innerHTML.trim() || null;
+    const descriptionEditor = getDescriptionEditor();
+    const descriptionText = descriptionEditor ? descriptionEditor.value.trim() : '';
+    const description = descriptionText || null;
     const mealUrl = document.getElementById('meal-url').value.trim();
     
     try {

@@ -19,7 +19,7 @@ USERNAME_PATTERN = re.compile(r'^[a-zA-Z0-9_-]+$')
 # Allowed URL schemes
 ALLOWED_URL_SCHEMES = {'http', 'https'}
 
-# Allowed HTML tags for rich text descriptions (from Quill editor)
+# Allowed HTML tags for rich text descriptions
 ALLOWED_HTML_TAGS = {'p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
                      'ul', 'ol', 'li', 'a', 'blockquote', 'pre', 'code'}
 ALLOWED_HTML_ATTRIBUTES = {'href', 'target', 'rel'}
@@ -35,7 +35,7 @@ def sanitize_html(text: str) -> str:
 def sanitize_rich_html(html_content: str) -> str:
     """
     Sanitize rich HTML content to allow safe tags while removing dangerous ones.
-    Used for descriptions that come from Quill editor.
+    Used for descriptions that may include basic formatting.
     """
     if not html_content:
         return html_content
@@ -165,7 +165,7 @@ def validate_meal_name(name: str) -> str:
 
 
 def validate_description(description: Optional[str]) -> Optional[str]:
-    """Validate and sanitize description (allows safe HTML from Quill editor)"""
+    """Validate and sanitize description (allows safe HTML formatting)."""
     if not description:
         return None
     
@@ -175,7 +175,7 @@ def validate_description(description: Optional[str]) -> Optional[str]:
         raise ValueError(f"Description must be no more than {DESCRIPTION_MAX_LENGTH} characters long")
     
     # Sanitize HTML to allow safe tags but remove dangerous ones
-    # This allows rich text from Quill editor while preventing XSS
+    # This allows safe rich text while preventing XSS
     description = sanitize_rich_html(description)
     
     return description
