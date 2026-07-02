@@ -23,6 +23,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY ./app /app/app
 COPY ./static /app/static
+COPY ./alembic /app/alembic
+COPY ./alembic.ini /app/alembic.ini
 
 EXPOSE 8000
 
