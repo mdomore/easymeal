@@ -1685,6 +1685,10 @@ header h1 {
     transition: all 0.3s;
 }
 
+.btn-generate-photo {
+    width: 100%;
+}
+
 .btn-add-photo:hover {
     border-color: var(--accent-color);
     background: var(--bg-tertiary);

@@ -3,9 +3,13 @@ from typing import List
 from sqlalchemy.orm import Session
 from pathlib import Path
 from io import BytesIO
+import base64
+from pydantic import BaseModel
+from urllib.parse import quote
 import easyocr
 from PIL import Image
 import numpy as np
+import requests
 
 from app.database import get_db, Meal
 from app.auth import get_current_user
@@ -22,6 +26,10 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB in bytes
 
 # Initialize EasyOCR reader (load models once at startup)
 ocr_reader = None
+
+
+class GenerateImageRequest(BaseModel):
+    title: str
 
 def get_ocr_reader():
     """Get or initialize EasyOCR reader"""
@@ -285,6 +293,57 @@ async def extract_text_from_photo(
         raise create_safe_http_exception(
             status_code=500,
             generic_message="Failed to process photo. Please try again.",
+            error=e
+        )
+
+
+@router.post("/generate-image")
+async def generate_image_for_recipe(
+    payload: GenerateImageRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Generate a recipe image using a free provider and upload to storage."""
+    del current_user
+
+    title = (payload.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Recipe title is required")
+
+    prompt = (
+        "Minimal appetizing food photo for a recipe card, clean composition, "
+        "lightweight web style, no text overlay. "
+        f"Recipe title: {title}"
+    )
+
+    pollinations_url = (
+        f"https://image.pollinations.ai/prompt/{quote(prompt, safe='')}"
+        "?model=flux&width=768&height=512&nologo=true&enhance=false"
+    )
+
+    try:
+        image_response = requests.get(pollinations_url, timeout=60)
+        if image_response.status_code != 200:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Image provider error ({image_response.status_code})"
+            )
+
+        content_type = image_response.headers.get("content-type", "")
+        if not content_type.startswith("image/"):
+            raise HTTPException(
+                status_code=502,
+                detail="Image provider did not return an image"
+            )
+
+        filename = upload_photo(image_response.content, ".jpg")
+        preview_data_url = f"data:image/jpeg;base64,{base64.b64encode(image_response.content).decode('ascii')}"
+        return {"filename": filename, "preview_data_url": preview_data_url}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise create_safe_http_exception(
+            status_code=500,
+            generic_message="Failed to generate image. Please try again.",
             error=e
         )
 

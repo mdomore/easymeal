@@ -152,6 +152,65 @@ async function addPhoto() {
     }
 }
 
+async function generatePhotoFromRecipe() {
+    const titleInput = document.getElementById('meal-name');
+    const generateBtn = document.getElementById('generate-photo-btn');
+    const title = titleInput ? titleInput.value.trim() : '';
+
+    if (!title) {
+        alert('Please enter a recipe name first');
+        return;
+    }
+
+    if (recipePhotos.length >= 2) {
+        alert(window.t ? window.t('modals.maxPhotos') || 'Maximum 2 photos allowed' : 'Maximum 2 photos allowed');
+        return;
+    }
+
+    if (generateBtn) {
+        generateBtn.disabled = true;
+        generateBtn.textContent = 'Generating...';
+    }
+
+    try {
+        const headers = buildAuthHeaders();
+        headers['Content-Type'] = 'application/json';
+
+        const response = await fetch(`${API_BASE}/meals/generate-image`, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({ title: title })
+        });
+
+        if (!response.ok) {
+            let errorMessage = 'Failed to generate image';
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.detail || errorMessage;
+            } catch (e) {
+                errorMessage = response.statusText || errorMessage;
+            }
+            throw new Error(errorMessage);
+        }
+
+        const data = await response.json();
+        recipePhotos.push({
+            filename: data.filename,
+            is_primary: recipePhotos.length === 0,
+            url: data.preview_data_url || null
+        });
+        renderPhotosContainer();
+    } catch (error) {
+        console.error('Generate image error:', error);
+        alert(error.message || 'Failed to generate image');
+    } finally {
+        if (generateBtn) {
+            generateBtn.disabled = false;
+            generateBtn.textContent = 'Generate Image';
+        }
+    }
+}
+
 function setPrimaryPhoto(index) {
     recipePhotos.forEach((photo, i) => {
         photo.is_primary = (i === index);
