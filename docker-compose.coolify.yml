@@ -1,6 +1,7 @@
-# Production compose for Coolify (or manual deploy with Traefik)
+# Production compose for Coolify (Docker Compose build pack)
 # - No host port bindings (Coolify/Traefik handles routing)
-# - Connects to existing Supabase stack via external network
+# - Domain + Traefik labels are managed by Coolify (set in dashboard/API)
+# - Connects to the existing Supabase stack via the external network
 services:
   api:
     build: .
@@ -19,25 +20,11 @@ services:
       SUPABASE_BUCKET: ${SUPABASE_BUCKET:-photos}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://micmoe.ddns.net}
       ENVIRONMENT: production
+    expose:
+      - "8000"
     networks:
-      - coolify
       - supabase_default
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.easymeal-http.rule=Host(`micmoe.ddns.net`) && PathPrefix(`/easymeal`)
-      - traefik.http.routers.easymeal-http.entrypoints=http
-      - traefik.http.routers.easymeal-http.middlewares=easymeal-redirect
-      - traefik.http.middlewares.easymeal-redirect.redirectscheme.scheme=https
-      - traefik.http.routers.easymeal.rule=Host(`micmoe.ddns.net`) && PathPrefix(`/easymeal`)
-      - traefik.http.routers.easymeal.entrypoints=https
-      - traefik.http.routers.easymeal.tls=true
-      - traefik.http.routers.easymeal.tls.certresolver=letsencrypt
-      - traefik.http.routers.easymeal.middlewares=easymeal-strip
-      - traefik.http.middlewares.easymeal-strip.stripprefix.prefixes=/easymeal
-      - traefik.http.services.easymeal.loadbalancer.server.port=8000
 
 networks:
-  coolify:
-    external: true
   supabase_default:
     external: true
