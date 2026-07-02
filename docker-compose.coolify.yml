@@ -22,6 +22,10 @@ services:
       ENVIRONMENT: production
     expose:
       - "8000"
+    # Force Traefik to route via the 'coolify' network (proxy is always attached to it).
+    # Without this, Traefik may pick the unreachable supabase_default IP -> 504 Gateway Timeout.
+    labels:
+      - traefik.docker.network=coolify
     networks:
       - supabase_default
 
