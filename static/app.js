@@ -535,9 +535,22 @@ window.addEventListener('DOMContentLoaded', async () => {
         currentToken = token;
         currentCsrfToken = csrfToken;
         await checkAuth();
+        if (!currentToken) {
+            // Token expired/invalid → back to landing
+            showLandingPage();
+        }
     } else {
-        // No token: show recipes view and load meals (backend may allow unauthenticated when DISABLE_AUTH)
-        showMealsView();
+        // No token: try meals without auth (local DISABLE_AUTH). On 401, show landing (prod).
+        try {
+            const probe = await fetch(`${API_BASE}/meals`);
+            if (probe.ok) {
+                showMealsView();
+            } else {
+                showLandingPage();
+            }
+        } catch (e) {
+            showLandingPage();
+        }
     }
     
     // Show install prompt if available
@@ -631,7 +644,10 @@ async function checkAuth() {
                 const errorText = await response.text();
                 console.error('Authentication failed - token invalid or expired:', errorText);
                 localStorage.removeItem('token');
+                localStorage.removeItem('csrf_token');
                 currentToken = null;
+                currentCsrfToken = null;
+                showLandingPage();
             } else {
                 console.error('Auth check failed with status:', response.status);
             }
@@ -639,7 +655,10 @@ async function checkAuth() {
     } catch (error) {
         console.error('Auth check failed:', error);
         localStorage.removeItem('token');
+        localStorage.removeItem('csrf_token');
         currentToken = null;
+        currentCsrfToken = null;
+        showLandingPage();
     }
 }
 
