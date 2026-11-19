@@ -1,7 +1,7 @@
 // Service Worker for EasyMeal PWA
-const CACHE_NAME = 'easymeal-v10';
-const STATIC_CACHE = 'easymeal-static-v10';
-const API_CACHE = 'easymeal-api-v10';
+const CACHE_NAME = 'easymeal-v11';
+const STATIC_CACHE = 'easymeal-static-v11';
+const API_CACHE = 'easymeal-api-v11';
 
 // Files to cache on install
 const STATIC_FILES = [
@@ -112,7 +112,23 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   
-  // Static files - cache first, then network
+  // JS/CSS: network first so deploys are visible immediately
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.json')) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(STATIC_CACHE).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Other static files - cache first, then network
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
