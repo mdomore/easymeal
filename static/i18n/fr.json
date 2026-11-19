@@ -40,7 +40,8 @@
     "importFromPhoto": "📷 Importer depuis une Photo",
     "createPermanentAccount": "Créez un compte permanent",
     "createPermanentAccountSuffix": "pour sauvegarder vos recettes définitivement",
-    "importRecipesNote": "Importez des recettes depuis des photos en utilisant l'OCR, ou ajoutez-les manuellement"
+    "importRecipesNote": "Importez des recettes depuis des photos en utilisant l'OCR, ou ajoutez-les manuellement",
+    "clearTags": "Effacer les tags"
   },
   "modals": {
     "convertAccountTitle": "Créer un Compte Permanent",
@@ -55,6 +56,7 @@
     "mealName": "Nom de la recette",
     "descriptionOptional": "Description (facultatif)",
     "recipeUrlOptional": "URL de la recette (facultatif)",
+    "tags": "Tags",
     "photoOptional": "Photo (facultatif)",
     "importPhotoOCR": "📷 Importer depuis une Photo (OCR)",
     "removePhoto": "Supprimer la Photo",

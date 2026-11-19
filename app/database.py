@@ -31,12 +31,30 @@ class Meal(Base):
     url = Column(String, nullable=True)
     photo_filename = Column(String, nullable=True)
     photos = Column(JSON, nullable=True)  # [{"filename": "...", "is_primary": true}, ...]
+    tags = Column(JSON, nullable=True)  # ["Plat", "Végétarien", ...]
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+def _ensure_meal_columns():
+    """Add missing columns on existing SQLite/Postgres tables (create_all does not alter)."""
+    from sqlalchemy import inspect, text
+    try:
+        inspector = inspect(engine)
+        if "meals" not in inspector.get_table_names():
+            return
+        existing = {c["name"] for c in inspector.get_columns("meals")}
+        if "tags" not in existing:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE meals ADD COLUMN tags JSON"))
+            print("Added meals.tags column")
+    except Exception as e:
+        print(f"Warning: could not ensure meal columns: {e}")
+
+
 def init_db():
-    """Create all tables"""
+    """Create all tables and ensure schema updates"""
     Base.metadata.create_all(bind=engine)
+    _ensure_meal_columns()
 
 
 def get_db():

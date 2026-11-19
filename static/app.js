@@ -9,6 +9,32 @@ let currentUser = null;
 let editingMealId = null;
 let sortOrder = 'asc'; // 'asc' or 'desc'
 let allMeals = []; // Store all meals for filtering
+let activeTagFilters = []; // Selected tags for list filter (AND)
+let selectedMealTags = []; // Tags selected in add/edit form
+
+// Suggested tags (FR) — adjust later then assign to meals
+const SUGGESTED_TAGS = [
+    "Entrée",
+    "Plat",
+    "Dessert",
+    "Petit-déjeuner",
+    "Goûter",
+    "Apéro",
+    "Viande",
+    "Poisson",
+    "Végétarien",
+    "Vegan",
+    "Rapide",
+    "Four",
+    "Poêle",
+    "Soupe",
+    "Salade",
+    "Pâtes",
+    "Asiatique",
+    "Italien",
+    "Mexicain",
+    "Batch cooking",
+];
 let originalMealPhoto = null; // Track original photo when editing starts
 let photoRemoved = false; // Track if photo was explicitly removed
 let quillEditor = null; // Quill editor instance
@@ -986,17 +1012,93 @@ async function loadMeals() {
     }
 }
 
+function getMealTags(meal) {
+    return Array.isArray(meal?.tags) ? meal.tags.filter(Boolean) : [];
+}
+
+function mealHasAllTags(meal, tags) {
+    if (!tags.length) return true;
+    const mealTags = getMealTags(meal).map(t => t.toLowerCase());
+    return tags.every(tag => mealTags.includes(tag.toLowerCase()));
+}
+
+function collectKnownTags() {
+    const fromMeals = new Set();
+    allMeals.forEach(meal => getMealTags(meal).forEach(t => fromMeals.add(t)));
+    SUGGESTED_TAGS.forEach(t => fromMeals.add(t));
+    return Array.from(fromMeals).sort((a, b) => a.localeCompare(b, 'fr'));
+}
+
+function renderTagFilters() {
+    const container = document.getElementById('tag-filters');
+    if (!container) return;
+
+    const tagsInUse = new Set();
+    allMeals.forEach(meal => getMealTags(meal).forEach(t => tagsInUse.add(t)));
+    const tags = Array.from(tagsInUse).sort((a, b) => a.localeCompare(b, 'fr'));
+
+    if (tags.length === 0 && activeTagFilters.length === 0) {
+        container.innerHTML = '';
+        container.classList.add('hidden');
+        return;
+    }
+    container.classList.remove('hidden');
+
+    const chips = tags.map(tag => {
+        const active = activeTagFilters.includes(tag);
+        return `<button type="button" class="tag-chip ${active ? 'active' : ''}" onclick="toggleTagFilter(${JSON.stringify(tag)})">${escapeHtml(tag)}</button>`;
+    }).join('');
+
+    const clearBtn = activeTagFilters.length
+        ? `<button type="button" class="tag-chip tag-clear" onclick="clearTagFilters()">${window.t ? window.t('meals.clearTags') : 'Clear tags'}</button>`
+        : '';
+
+    container.innerHTML = chips + clearBtn;
+}
+
+function toggleTagFilter(tag) {
+    const idx = activeTagFilters.indexOf(tag);
+    if (idx >= 0) activeTagFilters.splice(idx, 1);
+    else activeTagFilters.push(tag);
+    filterAndDisplayMeals();
+}
+
+function clearTagFilters() {
+    activeTagFilters = [];
+    filterAndDisplayMeals();
+}
+
+function renderMealTagsPicker() {
+    const container = document.getElementById('meal-tags-picker');
+    if (!container) return;
+    const tags = collectKnownTags();
+    container.innerHTML = tags.map(tag => {
+        const active = selectedMealTags.includes(tag);
+        return `<button type="button" class="tag-chip ${active ? 'active' : ''}" onclick="toggleMealTag(${JSON.stringify(tag)})">${escapeHtml(tag)}</button>`;
+    }).join('');
+}
+
+function toggleMealTag(tag) {
+    const idx = selectedMealTags.indexOf(tag);
+    if (idx >= 0) selectedMealTags.splice(idx, 1);
+    else selectedMealTags.push(tag);
+    renderMealTagsPicker();
+}
+
 function filterAndDisplayMeals() {
     const searchTerm = document.getElementById('search-input').value.trim().toLowerCase();
     
-    // Filter meals based on search term
     let filteredMeals = allMeals;
     if (searchTerm) {
-        filteredMeals = allMeals.filter(meal => 
+        filteredMeals = filteredMeals.filter(meal =>
             meal.name.toLowerCase().includes(searchTerm)
         );
     }
-    
+    if (activeTagFilters.length) {
+        filteredMeals = filteredMeals.filter(meal => mealHasAllTags(meal, activeTagFilters));
+    }
+
+    renderTagFilters();
     displayMeals(filteredMeals);
 }
 
@@ -1081,6 +1183,7 @@ function displayMeals(meals) {
             <div class="meal-card-content">
                 <h3>${escapeHtml(meal.name)}</h3>
                 ${description ? `<p class="meal-card-description">${description}</p>` : ''}
+                ${getMealTags(meal).length ? `<div class="meal-tags">${getMealTags(meal).map(t => `<span class="tag-chip static">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
             </div>
         </div>
     `;
@@ -1092,6 +1195,7 @@ function showAddMealForm() {
     originalMealPhoto = null;
     photoRemoved = false;
     recipePhotos = []; // Reset photos array
+    selectedMealTags = [];
     currentTab = 'manual';
     
     document.getElementById('modal-title').textContent = window.t ? window.t('modals.addMeal') : 'Add Recipe';
@@ -1107,6 +1211,7 @@ function showAddMealForm() {
     
     // Clear photos tab
     renderPhotosContainer();
+    renderMealTagsPicker();
     
     // Setup import photo input handler
     const importPhotoInput = document.getElementById('import-photo-input');
@@ -1150,6 +1255,7 @@ function editMeal(mealId) {
     .then(meal => {
         document.getElementById('meal-name').value = meal.name;
         document.getElementById('meal-url').value = meal.url || '';
+        selectedMealTags = getMealTags(meal).slice();
         
         // Reset tabs to manual entry
         switchTab('manual');
@@ -1171,6 +1277,7 @@ function editMeal(mealId) {
             }];
         }
         renderPhotosContainer();
+        renderMealTagsPicker();
         
         // Track original photo for backward compatibility
         originalMealPhoto = meal.photo_filename || null;
@@ -1291,6 +1398,15 @@ function showMealDetails(mealId) {
         // Display HTML content from description
         const descriptionHtml = meal.description || '<p>No description</p>';
         document.getElementById('detail-description').innerHTML = descriptionHtml;
+        const tagsSection = document.getElementById('detail-tags-section');
+        const tagsDiv = document.getElementById('detail-tags');
+        const tags = getMealTags(meal);
+        if (tags.length && tagsSection && tagsDiv) {
+            tagsDiv.innerHTML = tags.map(t => `<span class="tag-chip static">${escapeHtml(t)}</span>`).join('');
+            tagsSection.classList.remove('hidden');
+        } else if (tagsSection) {
+            tagsSection.classList.add('hidden');
+        }
         document.getElementById('detail-url').innerHTML = urlLink;
         document.getElementById('detail-date').textContent = new Date(meal.created_at).toLocaleString();
         document.getElementById('detail-modal').classList.remove('hidden');
@@ -1321,7 +1437,8 @@ async function saveMeal(event) {
         const body = {
             name,
             description: description || null,
-            url: mealUrl || null
+            url: mealUrl || null,
+            tags: selectedMealTags.slice()
         };
         
         // Include photos array if we have photos from the Photos tab
