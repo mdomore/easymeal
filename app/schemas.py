@@ -4,7 +4,7 @@ from datetime import datetime
 
 from app.validators import (
     validate_username, validate_password, validate_meal_name,
-    validate_description, validate_url, sanitize_filename
+    validate_description, validate_url, sanitize_filename, validate_tags
 )
 
 
@@ -89,6 +89,12 @@ class MealBase(BaseModel):
 
 class MealCreate(MealBase):
     photos: Optional[List[dict]] = None  # Array of photo objects: [{"filename": "...", "is_primary": true}, ...]
+    tags: Optional[List[str]] = None
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags_field(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        return validate_tags(v)
 
 
 class MealUpdate(BaseModel):
@@ -97,6 +103,7 @@ class MealUpdate(BaseModel):
     url: Optional[str] = None
     photo_filename: Optional[str] = None
     photos: Optional[List[dict]] = None  # Array of photo objects: [{"filename": "...", "is_primary": true}, ...]
+    tags: Optional[List[str]] = None
     
     @field_validator('name')
     @classmethod
@@ -126,10 +133,16 @@ class MealUpdate(BaseModel):
             return None
         return sanitize_filename(v)
 
+    @field_validator("tags")
+    @classmethod
+    def validate_tags_field(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        return validate_tags(v)
+
 
 class MealResponse(MealBase):
     id: Optional[int] = None
     photos: Optional[list] = None  # Array of photo objects: [{"filename": "...", "is_primary": true}, ...]
+    tags: Optional[List[str]] = None
     created_at: Optional[datetime] = None
     user_id: Optional[int] = None
 

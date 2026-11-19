@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-from app.database import init_db
+from app.database import init_db, _ensure_meal_columns
 from app.storage import ensure_bucket_exists
 from app.routes import auth, meals, static
 from app.config import CORS_ORIGINS_LIST, ENVIRONMENT
@@ -160,6 +160,12 @@ async def startup_event():
             init_db()
         except Exception as init_error:
             print(f"Warning: Could not initialize database: {init_error}")
+
+    # Ensure new columns exist (e.g. meals.tags) even when Alembic has nothing new
+    try:
+        _ensure_meal_columns()
+    except Exception as e:
+        print(f"Warning: could not ensure meal columns: {e}")
     
     # Initialize Supabase Storage bucket
     try:

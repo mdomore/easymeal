@@ -89,6 +89,7 @@ async def create_meal(
             url=meal.url,
             photo_filename=meal.photo_filename,
             photos=meal.photos,  # Store photos array if provided
+            tags=meal.tags or [],
             user_id=current_user["id"]
         )
         
@@ -143,6 +144,8 @@ async def update_meal(
             db_meal.photo_filename = meal.photo_filename
         if meal.photos is not None:
             db_meal.photos = meal.photos
+        if meal.tags is not None:
+            db_meal.tags = meal.tags
         
         db.commit()
         db.refresh(db_meal)

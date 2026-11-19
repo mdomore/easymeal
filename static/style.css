@@ -820,6 +820,72 @@ header h1 {
     color: var(--text-tertiary);
 }
 
+.tag-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.tag-filters.hidden {
+    display: none;
+}
+
+.tags-label {
+    display: block;
+    margin-top: 14px;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.tags-picker,
+.meal-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.tag-chip {
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    line-height: 1.2;
+}
+
+.tag-chip:hover {
+    border-color: var(--accent-color);
+    color: var(--text-primary);
+}
+
+.tag-chip.active {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    color: #fff;
+}
+
+.tag-chip.static {
+    cursor: default;
+    pointer-events: none;
+}
+
+.tag-chip.tag-clear {
+    border-style: dashed;
+}
+
+.meal-card-content .meal-tags {
+    margin-top: 8px;
+}
+
+.meal-card-content .meal-tags .tag-chip {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+}
+
 /* Landing page responsive */
 @media (max-width: 768px) {
     .nav-container {
@@ -1517,16 +1583,85 @@ header h1 {
     resize: vertical;
 }
 
-/* Simple description editor */
-.simple-editor-toolbar {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 8px;
+/* Quill Editor Styling */
+#quill-editor {
+    min-height: 200px;
+    margin-bottom: 15px;
 }
 
-.editor-tool-btn {
-    min-width: 56px;
-    padding: 6px 10px;
+#quill-editor .ql-container {
+    font-family: inherit;
+    font-size: 16px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+#quill-editor .ql-editor {
+    min-height: 200px;
+    padding: 12px 16px;
+}
+
+#quill-editor .ql-editor.ql-blank::before {
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+
+#quill-editor .ql-toolbar {
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border-color);
+    border-bottom: none;
+    border-radius: 8px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding: 8px;
+}
+
+#quill-editor .ql-toolbar .ql-stroke {
+    stroke: var(--text-primary);
+}
+
+#quill-editor .ql-toolbar .ql-fill {
+    fill: var(--text-primary);
+}
+
+#quill-editor .ql-toolbar button:hover,
+#quill-editor .ql-toolbar button:focus,
+#quill-editor .ql-toolbar button.ql-active {
+    color: var(--accent-color);
+}
+
+#quill-editor .ql-toolbar button:hover .ql-stroke,
+#quill-editor .ql-toolbar button:focus .ql-stroke,
+#quill-editor .ql-toolbar button.ql-active .ql-stroke {
+    stroke: var(--accent-color);
+}
+
+#quill-editor .ql-toolbar button:hover .ql-fill,
+#quill-editor .ql-toolbar button:focus .ql-fill,
+#quill-editor .ql-toolbar button.ql-active .ql-fill {
+    fill: var(--accent-color);
+}
+
+#quill-editor .ql-toolbar .ql-picker-label {
+    color: var(--text-primary);
+}
+
+#quill-editor .ql-toolbar .ql-picker-options {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+}
+
+#quill-editor .ql-toolbar .ql-picker-item {
+    color: var(--text-primary);
+}
+
+#quill-editor .ql-toolbar .ql-picker-item:hover {
+    color: var(--accent-color);
+    background: var(--bg-tertiary);
 }
 
 /* Modal Tabs */
@@ -1683,10 +1818,6 @@ header h1 {
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s;
-}
-
-.btn-generate-photo {
-    width: 100%;
 }
 
 .btn-add-photo:hover {

@@ -230,3 +230,33 @@ def sanitize_filename(filename: Optional[str]) -> Optional[str]:
         filename = filename[:255]
     
     return filename
+
+
+TAG_MAX_LENGTH = 40
+TAGS_MAX_COUNT = 12
+
+
+def validate_tags(tags: Optional[list]) -> Optional[list]:
+    """Normalize a list of tag strings (trim, dedupe, length limits)."""
+    if tags is None:
+        return None
+    if not isinstance(tags, list):
+        raise ValueError("Tags must be a list")
+    cleaned = []
+    seen = set()
+    for raw in tags:
+        if raw is None:
+            continue
+        tag = sanitize_html(str(raw).strip())
+        if not tag:
+            continue
+        if len(tag) > TAG_MAX_LENGTH:
+            raise ValueError(f"Tag must be at most {TAG_MAX_LENGTH} characters")
+        key = tag.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(tag)
+    if len(cleaned) > TAGS_MAX_COUNT:
+        raise ValueError(f"At most {TAGS_MAX_COUNT} tags allowed")
+    return cleaned

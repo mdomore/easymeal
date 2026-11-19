@@ -40,7 +40,8 @@
     "importFromPhoto": "📷 Import from Photo",
     "createPermanentAccount": "Create a permanent account",
     "createPermanentAccountSuffix": "to save your recipes permanently",
-    "importRecipesNote": "Import recipes from photos using OCR, or add them manually"
+    "importRecipesNote": "Import recipes from photos using OCR, or add them manually",
+    "clearTags": "Clear tags"
   },
   "modals": {
     "convertAccountTitle": "Create Permanent Account",
@@ -55,6 +56,7 @@
     "mealName": "Recipe name",
     "descriptionOptional": "Description (optional)",
     "recipeUrlOptional": "Recipe URL (optional)",
+    "tags": "Tags",
     "photoOptional": "Photo (optional)",
     "importPhotoOCR": "📷 Import from Photo (OCR)",
     "removePhoto": "Remove Photo",

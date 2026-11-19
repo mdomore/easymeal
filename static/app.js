@@ -1,13 +1,43 @@
-// Ensure API_BASE always uses HTTPS protocol (force HTTPS, never HTTP)
-const API_BASE = `https://${window.location.host}/easymeal/api`;
+// API base: use /easymeal/api when app is under /easymeal, else /api (e.g. local Docker at root)
+const API_BASE = (() => {
+    const path = window.location.pathname.startsWith('/easymeal') ? '/easymeal/api' : '/api';
+    return `${window.location.origin}${path}`;
+})();
 let currentToken = null;
 let currentCsrfToken = null;
 let currentUser = null;
 let editingMealId = null;
 let sortOrder = 'asc'; // 'asc' or 'desc'
 let allMeals = []; // Store all meals for filtering
+let activeTagFilters = []; // Selected tags for list filter (AND)
+let selectedMealTags = []; // Tags selected in add/edit form
+
+// Suggested tags (FR) — adjust later then assign to meals
+const SUGGESTED_TAGS = [
+    "Entrée",
+    "Plat",
+    "Dessert",
+    "Petit-déjeuner",
+    "Goûter",
+    "Apéro",
+    "Viande",
+    "Poisson",
+    "Végétarien",
+    "Vegan",
+    "Rapide",
+    "Four",
+    "Poêle",
+    "Soupe",
+    "Salade",
+    "Pâtes",
+    "Asiatique",
+    "Italien",
+    "Mexicain",
+    "Batch cooking",
+];
 let originalMealPhoto = null; // Track original photo when editing starts
 let photoRemoved = false; // Track if photo was explicitly removed
+let quillEditor = null; // Quill editor instance
 let currentTab = 'manual'; // Current active tab
 let recipePhotos = []; // Array to store photos: [{filename: "...", is_primary: true, url: "..."}, ...]
 
@@ -152,65 +182,6 @@ async function addPhoto() {
     }
 }
 
-async function generatePhotoFromRecipe() {
-    const titleInput = document.getElementById('meal-name');
-    const generateBtn = document.getElementById('generate-photo-btn');
-    const title = titleInput ? titleInput.value.trim() : '';
-
-    if (!title) {
-        alert('Please enter a recipe name first');
-        return;
-    }
-
-    if (recipePhotos.length >= 2) {
-        alert(window.t ? window.t('modals.maxPhotos') || 'Maximum 2 photos allowed' : 'Maximum 2 photos allowed');
-        return;
-    }
-
-    if (generateBtn) {
-        generateBtn.disabled = true;
-        generateBtn.textContent = 'Generating...';
-    }
-
-    try {
-        const headers = buildAuthHeaders();
-        headers['Content-Type'] = 'application/json';
-
-        const response = await fetch(`${API_BASE}/meals/generate-image`, {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify({ title: title })
-        });
-
-        if (!response.ok) {
-            let errorMessage = 'Failed to generate image';
-            try {
-                const errorData = await response.json();
-                errorMessage = errorData.detail || errorMessage;
-            } catch (e) {
-                errorMessage = response.statusText || errorMessage;
-            }
-            throw new Error(errorMessage);
-        }
-
-        const data = await response.json();
-        recipePhotos.push({
-            filename: data.filename,
-            is_primary: recipePhotos.length === 0,
-            url: data.preview_data_url || null
-        });
-        renderPhotosContainer();
-    } catch (error) {
-        console.error('Generate image error:', error);
-        alert(error.message || 'Failed to generate image');
-    } finally {
-        if (generateBtn) {
-            generateBtn.disabled = false;
-            generateBtn.textContent = 'Generate Image';
-        }
-    }
-}
-
 function setPrimaryPhoto(index) {
     recipePhotos.forEach((photo, i) => {
         photo.is_primary = (i === index);
@@ -280,13 +251,13 @@ async function handleImportPhoto(e) {
         document.getElementById('meal-name').value = '';
         document.getElementById('meal-url').value = '';
         
+        // Initialize Quill editor if not already done
+        initQuillEditor();
+        
         // Populate description with extracted text
-        const descriptionEditor = document.getElementById('meal-description-editor');
         if (data.extracted_text && data.extracted_text.trim()) {
             const text = data.extracted_text.trim();
-            if (descriptionEditor) {
-                descriptionEditor.value = text;
-            }
+            quillEditor.setText(text);
             
             // Try to extract a name from the first line
             const firstLine = text.split('\n')[0].trim();
@@ -321,140 +292,25 @@ function stripHtml(html) {
     return tmp.textContent || tmp.innerText || '';
 }
 
-function hasHtmlTags(text) {
-    return /<\s*[a-z][^>]*>/i.test(text || '');
-}
-
-function getDescriptionEditor() {
-    return document.getElementById('meal-description-editor');
-}
-
-function applySimpleBold() {
-    const editor = getDescriptionEditor();
-    if (!editor) return;
-    const start = editor.selectionStart;
-    const end = editor.selectionEnd;
-    const selectedText = editor.value.slice(start, end);
-    const wrapped = `**${selectedText || 'bold text'}**`;
-    editor.setRangeText(wrapped, start, end, 'end');
-    editor.focus();
-}
-
-function applySimpleBullet() {
-    const editor = getDescriptionEditor();
-    if (!editor) return;
-    const start = editor.selectionStart;
-    const end = editor.selectionEnd;
-    const selectedText = editor.value.slice(start, end);
-
-    if (!selectedText) {
-        editor.setRangeText('- ', start, end, 'end');
-        editor.focus();
-        return;
+// Initialize Quill editor
+function initQuillEditor() {
+    if (quillEditor) {
+        return; // Already initialized
     }
-
-    const bulleted = selectedText
-        .split('\n')
-        .map(line => line.trim() ? `- ${line.replace(/^-+\s*/, '')}` : line)
-        .join('\n');
-    editor.setRangeText(bulleted, start, end, 'end');
-    editor.focus();
-}
-
-function escapeHtmlText(text) {
-    return text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-}
-
-function formatInlineBold(line) {
-    return line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-}
-
-function simpleDescriptionTextToHtml(text) {
-    if (!text || !text.trim()) return null;
-    const lines = text.split('\n');
-    const htmlParts = [];
-    let listBuffer = [];
-    let paragraphBuffer = [];
-
-    function flushParagraph() {
-        if (paragraphBuffer.length > 0) {
-            const joined = paragraphBuffer.join('<br>');
-            htmlParts.push(`<p>${joined}</p>`);
-            paragraphBuffer = [];
-        }
-    }
-
-    function flushList() {
-        if (listBuffer.length > 0) {
-            htmlParts.push(`<ul>${listBuffer.join('')}</ul>`);
-            listBuffer = [];
-        }
-    }
-
-    lines.forEach(rawLine => {
-        const escapedLine = escapeHtmlText(rawLine.trim());
-        const bulletMatch = escapedLine.match(/^- (.+)$/);
-        if (bulletMatch) {
-            flushParagraph();
-            listBuffer.push(`<li>${formatInlineBold(bulletMatch[1])}</li>`);
-            return;
-        }
-
-        flushList();
-        if (!escapedLine) {
-            flushParagraph();
-            return;
-        }
-        paragraphBuffer.push(formatInlineBold(escapedLine));
+    
+    quillEditor = new Quill('#quill-editor', {
+        theme: 'snow',
+        modules: {
+            toolbar: [
+                [{ 'header': [1, 2, 3, false] }],
+                ['bold', 'italic', 'underline'],
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                ['link'],
+                ['clean']
+            ]
+        },
+        placeholder: window.t ? window.t('modals.descriptionOptional') : 'Description (optional)'
     });
-
-    flushParagraph();
-    flushList();
-
-    return htmlParts.join('');
-}
-
-function simpleDescriptionHtmlToText(html) {
-    if (!html || !html.trim()) return '';
-
-    let normalized = html;
-    normalized = normalized.replace(/<\s*strong\s*>(.*?)<\s*\/\s*strong\s*>/gi, '**$1**');
-    normalized = normalized.replace(/<\s*b\s*>(.*?)<\s*\/\s*b\s*>/gi, '**$1**');
-    normalized = normalized.replace(/<\s*br\s*\/?>/gi, '\n');
-    normalized = normalized.replace(/<\s*li\s*>(.*?)<\s*\/\s*li\s*>/gi, '- $1\n');
-    normalized = normalized.replace(/<\s*\/?\s*ul\s*>/gi, '\n');
-    normalized = normalized.replace(/<\s*\/?\s*ol\s*>/gi, '\n');
-    normalized = normalized.replace(/<\s*\/?\s*p\s*>/gi, '\n');
-
-    const tmp = document.createElement('div');
-    tmp.innerHTML = normalized;
-    return (tmp.textContent || tmp.innerText || '')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
-}
-
-function markdownDescriptionToPlainText(text) {
-    if (!text) return '';
-    return text
-        .replace(/\*\*(.+?)\*\*/g, '$1')
-        .replace(/^\s*[-*]\s+/gm, '')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
-}
-
-function renderDescriptionForDisplay(description) {
-    if (!description || !description.trim()) {
-        return '<p>No description</p>';
-    }
-
-    if (hasHtmlTags(description)) {
-        return description;
-    }
-
-    return simpleDescriptionTextToHtml(description) || `<p>${escapeHtml(description)}</p>`;
 }
 
 // Dark mode functions
@@ -569,8 +425,6 @@ function updateLanguageButtonText() {
 // Expose functions globally
 window.toggleLanguage = toggleLanguage;
 window.updateLanguageButtonText = updateLanguageButtonText;
-window.applySimpleBold = applySimpleBold;
-window.applySimpleBullet = applySimpleBullet;
 
 function syncMobileLanguageSwitcher() {
     updateLanguageButtonText();
@@ -629,7 +483,8 @@ if ('serviceWorker' in navigator) {
         
         // Use the correct path based on root_path
         const swPath = '/easymeal/static/sw.js';
-        const swScope = '/easymeal/';
+        // Scope must be under the Service Worker script path directory (/easymeal/static/)
+        const swScope = '/easymeal/static/';
         
         navigator.serviceWorker.register(swPath, { scope: swScope })
             .then((registration) => {
@@ -670,7 +525,7 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-// Check if user is already logged in
+// Check if user is already logged in (or run in no-login mode: show recipes directly)
 window.addEventListener('DOMContentLoaded', async () => {
     initDarkMode();
     
@@ -681,8 +536,8 @@ window.addEventListener('DOMContentLoaded', async () => {
         currentCsrfToken = csrfToken;
         await checkAuth();
     } else {
-        // No token - show landing page
-        showLandingPage();
+        // No token: show recipes view and load meals (backend may allow unauthenticated when DISABLE_AUTH)
+        showMealsView();
     }
     
     // Show install prompt if available
@@ -919,6 +774,11 @@ function showMealsView() {
     document.getElementById('auth-modal').classList.add('hidden');
     document.getElementById('meals-view').classList.remove('hidden');
     
+    // Hide logout when no token (no-login / DISABLE_AUTH mode)
+    document.querySelectorAll('#meals-view button[onclick="logout()"]').forEach(el => {
+        el.style.display = currentToken ? '' : 'none';
+    });
+    
     // Close mobile menu if open
     const overlay = document.getElementById('mobile-menu-overlay');
     if (overlay && overlay.classList.contains('active')) {
@@ -1152,17 +1012,93 @@ async function loadMeals() {
     }
 }
 
+function getMealTags(meal) {
+    return Array.isArray(meal?.tags) ? meal.tags.filter(Boolean) : [];
+}
+
+function mealHasAllTags(meal, tags) {
+    if (!tags.length) return true;
+    const mealTags = getMealTags(meal).map(t => t.toLowerCase());
+    return tags.every(tag => mealTags.includes(tag.toLowerCase()));
+}
+
+function collectKnownTags() {
+    const fromMeals = new Set();
+    allMeals.forEach(meal => getMealTags(meal).forEach(t => fromMeals.add(t)));
+    SUGGESTED_TAGS.forEach(t => fromMeals.add(t));
+    return Array.from(fromMeals).sort((a, b) => a.localeCompare(b, 'fr'));
+}
+
+function renderTagFilters() {
+    const container = document.getElementById('tag-filters');
+    if (!container) return;
+
+    const tagsInUse = new Set();
+    allMeals.forEach(meal => getMealTags(meal).forEach(t => tagsInUse.add(t)));
+    const tags = Array.from(tagsInUse).sort((a, b) => a.localeCompare(b, 'fr'));
+
+    if (tags.length === 0 && activeTagFilters.length === 0) {
+        container.innerHTML = '';
+        container.classList.add('hidden');
+        return;
+    }
+    container.classList.remove('hidden');
+
+    const chips = tags.map(tag => {
+        const active = activeTagFilters.includes(tag);
+        return `<button type="button" class="tag-chip ${active ? 'active' : ''}" onclick="toggleTagFilter(${JSON.stringify(tag)})">${escapeHtml(tag)}</button>`;
+    }).join('');
+
+    const clearBtn = activeTagFilters.length
+        ? `<button type="button" class="tag-chip tag-clear" onclick="clearTagFilters()">${window.t ? window.t('meals.clearTags') : 'Clear tags'}</button>`
+        : '';
+
+    container.innerHTML = chips + clearBtn;
+}
+
+function toggleTagFilter(tag) {
+    const idx = activeTagFilters.indexOf(tag);
+    if (idx >= 0) activeTagFilters.splice(idx, 1);
+    else activeTagFilters.push(tag);
+    filterAndDisplayMeals();
+}
+
+function clearTagFilters() {
+    activeTagFilters = [];
+    filterAndDisplayMeals();
+}
+
+function renderMealTagsPicker() {
+    const container = document.getElementById('meal-tags-picker');
+    if (!container) return;
+    const tags = collectKnownTags();
+    container.innerHTML = tags.map(tag => {
+        const active = selectedMealTags.includes(tag);
+        return `<button type="button" class="tag-chip ${active ? 'active' : ''}" onclick="toggleMealTag(${JSON.stringify(tag)})">${escapeHtml(tag)}</button>`;
+    }).join('');
+}
+
+function toggleMealTag(tag) {
+    const idx = selectedMealTags.indexOf(tag);
+    if (idx >= 0) selectedMealTags.splice(idx, 1);
+    else selectedMealTags.push(tag);
+    renderMealTagsPicker();
+}
+
 function filterAndDisplayMeals() {
     const searchTerm = document.getElementById('search-input').value.trim().toLowerCase();
     
-    // Filter meals based on search term
     let filteredMeals = allMeals;
     if (searchTerm) {
-        filteredMeals = allMeals.filter(meal => 
+        filteredMeals = filteredMeals.filter(meal =>
             meal.name.toLowerCase().includes(searchTerm)
         );
     }
-    
+    if (activeTagFilters.length) {
+        filteredMeals = filteredMeals.filter(meal => mealHasAllTags(meal, activeTagFilters));
+    }
+
+    renderTagFilters();
     displayMeals(filteredMeals);
 }
 
@@ -1230,11 +1166,8 @@ function displayMeals(meals) {
         const hasPhoto = !!photoFilename;
         // Include token in URL for image authentication (images can't send Authorization headers)
         const photoUrl = hasPhoto ? `static/photos/${escapeHtml(photoFilename)}?token=${encodeURIComponent(currentToken || '')}` : '';
-        const plainDescription = meal.description
-            ? (hasHtmlTags(meal.description)
-                ? stripHtml(meal.description)
-                : markdownDescriptionToPlainText(meal.description))
-            : '';
+        // Strip HTML tags for card preview
+        const plainDescription = meal.description ? stripHtml(meal.description) : '';
         const description = plainDescription ? (plainDescription.substring(0, 100) + (plainDescription.length > 100 ? '...' : '')) : '';
         
         return `
@@ -1250,6 +1183,7 @@ function displayMeals(meals) {
             <div class="meal-card-content">
                 <h3>${escapeHtml(meal.name)}</h3>
                 ${description ? `<p class="meal-card-description">${description}</p>` : ''}
+                ${getMealTags(meal).length ? `<div class="meal-tags">${getMealTags(meal).map(t => `<span class="tag-chip static">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
             </div>
         </div>
     `;
@@ -1261,6 +1195,7 @@ function showAddMealForm() {
     originalMealPhoto = null;
     photoRemoved = false;
     recipePhotos = []; // Reset photos array
+    selectedMealTags = [];
     currentTab = 'manual';
     
     document.getElementById('modal-title').textContent = window.t ? window.t('modals.addMeal') : 'Add Recipe';
@@ -1276,6 +1211,7 @@ function showAddMealForm() {
     
     // Clear photos tab
     renderPhotosContainer();
+    renderMealTagsPicker();
     
     // Setup import photo input handler
     const importPhotoInput = document.getElementById('import-photo-input');
@@ -1283,10 +1219,9 @@ function showAddMealForm() {
         importPhotoInput.onchange = handleImportPhoto;
     }
     
-    const descriptionEditor = getDescriptionEditor();
-    if (descriptionEditor) {
-        descriptionEditor.value = '';
-    }
+    // Initialize Quill editor if not already done
+    initQuillEditor();
+    quillEditor.setContents([]); // Clear editor content
     
     document.getElementById('meal-modal').classList.remove('hidden');
 }
@@ -1320,6 +1255,7 @@ function editMeal(mealId) {
     .then(meal => {
         document.getElementById('meal-name').value = meal.name;
         document.getElementById('meal-url').value = meal.url || '';
+        selectedMealTags = getMealTags(meal).slice();
         
         // Reset tabs to manual entry
         switchTab('manual');
@@ -1341,6 +1277,7 @@ function editMeal(mealId) {
             }];
         }
         renderPhotosContainer();
+        renderMealTagsPicker();
         
         // Track original photo for backward compatibility
         originalMealPhoto = meal.photo_filename || null;
@@ -1356,11 +1293,16 @@ function editMeal(mealId) {
             importPhotoInput.onchange = handleImportPhoto;
         }
         
-        const descriptionEditor = getDescriptionEditor();
-        if (descriptionEditor) {
-            descriptionEditor.value = hasHtmlTags(meal.description || '')
-                ? simpleDescriptionHtmlToText(meal.description || '')
-                : (meal.description || '');
+        // Initialize Quill editor if not already done
+        initQuillEditor();
+        
+        // Load description into Quill editor using Quill's clipboard API
+        if (meal.description) {
+            // Convert stored HTML into a Quill Delta to preserve formatting
+            const delta = quillEditor.clipboard.convert(meal.description);
+            quillEditor.setContents(delta);
+        } else {
+            quillEditor.setContents([]);
         }
         
         document.getElementById('meal-modal').classList.remove('hidden');
@@ -1453,8 +1395,18 @@ function showMealDetails(mealId) {
         }
         
         document.getElementById('detail-name').textContent = meal.name;
-        const descriptionHtml = renderDescriptionForDisplay(meal.description || '');
+        // Display HTML content from description
+        const descriptionHtml = meal.description || '<p>No description</p>';
         document.getElementById('detail-description').innerHTML = descriptionHtml;
+        const tagsSection = document.getElementById('detail-tags-section');
+        const tagsDiv = document.getElementById('detail-tags');
+        const tags = getMealTags(meal);
+        if (tags.length && tagsSection && tagsDiv) {
+            tagsDiv.innerHTML = tags.map(t => `<span class="tag-chip static">${escapeHtml(t)}</span>`).join('');
+            tagsSection.classList.remove('hidden');
+        } else if (tagsSection) {
+            tagsSection.classList.add('hidden');
+        }
         document.getElementById('detail-url').innerHTML = urlLink;
         document.getElementById('detail-date').textContent = new Date(meal.created_at).toLocaleString();
         document.getElementById('detail-modal').classList.remove('hidden');
@@ -1473,9 +1425,9 @@ async function saveMeal(event) {
     event.preventDefault();
     
     const name = document.getElementById('meal-name').value;
-    const descriptionEditor = getDescriptionEditor();
-    const descriptionText = descriptionEditor ? descriptionEditor.value.trim() : '';
-    const description = descriptionText || null;
+    // Get HTML content from Quill editor
+    initQuillEditor(); // Ensure editor is initialized
+    const description = quillEditor.root.innerHTML.trim() || null;
     const mealUrl = document.getElementById('meal-url').value.trim();
     
     try {
@@ -1485,7 +1437,8 @@ async function saveMeal(event) {
         const body = {
             name,
             description: description || null,
-            url: mealUrl || null
+            url: mealUrl || null,
+            tags: selectedMealTags.slice()
         };
         
         // Include photos array if we have photos from the Photos tab
