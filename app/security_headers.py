@@ -48,17 +48,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Content Security Policy
         # Allow same origin, data URIs, and blob URIs for images
         # Allow inline scripts and styles for the PWA (service worker, etc.)
-        # Allow Quill.js CDN for rich text editor
         # Note: For stricter security, consider removing 'unsafe-inline' and using nonces
-        # Allow both cdn.quilljs.com and cdn.jsdelivr.net (some environments rewrite the Quill CDN URL)
+        # Allow Quill CDN (cdn.quilljs.com / jsdelivr) for the rich text editor
         csp_parts = [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.quilljs.com https://cdn.jsdelivr.net",  # Needed for Quill and PWA
-            "style-src 'self' 'unsafe-inline' https://cdn.quilljs.com https://cdn.jsdelivr.net",  # Needed for Quill
-            "img-src 'self' data: blob: https:",  # Allow images from same origin, data URIs, blob URIs, and HTTPS
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.quilljs.com https://cdn.jsdelivr.net",
+            "style-src 'self' 'unsafe-inline' https://cdn.quilljs.com https://cdn.jsdelivr.net",
+            "img-src 'self' data: blob: https:",
             "font-src 'self' data:",
-            "connect-src 'self' https:",  # Allow API calls to same origin and HTTPS
-            "frame-ancestors 'self'",  # Allow embedding in same origin
+            "connect-src 'self' https:",
+            "frame-ancestors 'self'",
             "base-uri 'self'",
             "form-action 'self'",
         ]
