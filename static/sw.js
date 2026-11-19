@@ -1,7 +1,7 @@
 // Service Worker for EasyMeal PWA
-const CACHE_NAME = 'easymeal-v11';
-const STATIC_CACHE = 'easymeal-static-v11';
-const API_CACHE = 'easymeal-api-v11';
+const CACHE_NAME = 'easymeal-v12';
+const STATIC_CACHE = 'easymeal-static-v12';
+const API_CACHE = 'easymeal-api-v12';
 
 // Files to cache on install
 const STATIC_FILES = [

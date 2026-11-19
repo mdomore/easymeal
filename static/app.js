@@ -1046,14 +1046,26 @@ function renderTagFilters() {
 
     const chips = tags.map(tag => {
         const active = activeTagFilters.includes(tag);
-        return `<button type="button" class="tag-chip ${active ? 'active' : ''}" onclick="toggleTagFilter(${JSON.stringify(tag)})">${escapeHtml(tag)}</button>`;
+        return `<button type="button" class="tag-chip ${active ? 'active' : ''}" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`;
     }).join('');
 
     const clearBtn = activeTagFilters.length
-        ? `<button type="button" class="tag-chip tag-clear" onclick="clearTagFilters()">${window.t ? window.t('meals.clearTags') : 'Clear tags'}</button>`
+        ? `<button type="button" class="tag-chip tag-clear" data-clear-tags="1">${window.t ? window.t('meals.clearTags') : 'Clear tags'}</button>`
         : '';
 
     container.innerHTML = chips + clearBtn;
+    if (!container.dataset.bound) {
+        container.dataset.bound = '1';
+        container.addEventListener('click', (e) => {
+            const btn = e.target.closest('button.tag-chip');
+            if (!btn || !container.contains(btn)) return;
+            if (btn.dataset.clearTags) {
+                clearTagFilters();
+                return;
+            }
+            if (btn.dataset.tag) toggleTagFilter(btn.dataset.tag);
+        });
+    }
 }
 
 function toggleTagFilter(tag) {
@@ -1074,8 +1086,16 @@ function renderMealTagsPicker() {
     const tags = collectKnownTags();
     container.innerHTML = tags.map(tag => {
         const active = selectedMealTags.includes(tag);
-        return `<button type="button" class="tag-chip ${active ? 'active' : ''}" onclick="toggleMealTag(${JSON.stringify(tag)})">${escapeHtml(tag)}</button>`;
+        return `<button type="button" class="tag-chip ${active ? 'active' : ''}" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`;
     }).join('');
+    if (!container.dataset.bound) {
+        container.dataset.bound = '1';
+        container.addEventListener('click', (e) => {
+            const btn = e.target.closest('button.tag-chip');
+            if (!btn || !container.contains(btn) || !btn.dataset.tag) return;
+            toggleMealTag(btn.dataset.tag);
+        });
+    }
 }
 
 function toggleMealTag(tag) {
