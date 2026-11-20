@@ -1,14 +1,16 @@
 // Service Worker for EasyMeal PWA
-const CACHE_NAME = 'easymeal-v13';
-const STATIC_CACHE = 'easymeal-static-v13';
-const API_CACHE = 'easymeal-api-v13';
+const CACHE_NAME = 'easymeal-v14';
+const STATIC_CACHE = 'easymeal-static-v14';
+const API_CACHE = 'easymeal-api-v14';
 
 // Files to cache on install
 const STATIC_FILES = [
   '/easymeal/',
   '/easymeal/static/index.html',
-  '/easymeal/static/style.css',
-  '/easymeal/static/app.js',
+  '/easymeal/static/style.css?v=14',
+  '/easymeal/static/app.js?v=14',
+  '/easymeal/static/vendor/quill/quill.js?v=14',
+  '/easymeal/static/vendor/quill/quill.snow.css?v=14',
   '/easymeal/static/manifest.json'
 ];
 
@@ -112,18 +114,20 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   
-  // JS/CSS: network first so deploys are visible immediately
-  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.json')) {
+  // HTML navigations + JS/CSS/JSON: network first so deploys/CSP updates apply immediately
+  const isNavigation = event.request.mode === 'navigate';
+  const isAsset = url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.json') || url.pathname.endsWith('.html');
+  if (isNavigation || isAsset) {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          if (response && response.status === 200) {
+          if (response && response.status === 200 && event.request.method === 'GET') {
             const clone = response.clone();
             caches.open(STATIC_CACHE).then((cache) => cache.put(event.request, clone));
           }
           return response;
         })
-        .catch(() => caches.match(event.request))
+        .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/easymeal/')))
     );
     return;
   }
