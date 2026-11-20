@@ -1,19 +1,28 @@
 from fastapi import APIRouter, HTTPException, Depends, Request, Query
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import StreamingResponse, RedirectResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import cast, String
 from typing import Optional
 
-from app.storage import get_photo_object
+from app.storage import get_photo_object, get_browser_photo_url
 from app.database import get_db, Meal
 from app.auth import get_current_user, _get_token_from_request
 from app.config import DISABLE_AUTH
 
-# Use a specific prefix to avoid conflicts with StaticFiles mount
 router = APIRouter(prefix="/static/photos", tags=["static"])
 
-# Note: Static files are served via app.mount("/static", ...) in main.py
-# This router only handles photos from Supabase Storage at /static/photos/{filename}
-# Regular static files are served by StaticFiles mount
+
+def _meal_owns_photo(db: Session, filename: str) -> bool:
+    """Fast ownership check without loading every meal into Python."""
+    if db.query(Meal.id).filter(Meal.photo_filename == filename).first():
+        return True
+    # photos JSON array: match filename substring (UUID filenames → safe enough)
+    return (
+        db.query(Meal.id)
+        .filter(Meal.photos.isnot(None), cast(Meal.photos, String).like(f"%{filename}%"))
+        .first()
+        is not None
+    )
 
 
 @router.get("/{filename}")
@@ -26,6 +35,7 @@ async def serve_photo(
     """
     Serve photo from storage. Verifies photo belongs to a meal.
     When DISABLE_AUTH, no token required. Otherwise requires auth.
+    Redirects to public Supabase URL when available; otherwise streams bytes.
     """
     if not DISABLE_AUTH:
         auth_token = _get_token_from_request(request) or token
@@ -45,51 +55,39 @@ async def serve_photo(
             print(f"Error authenticating photo request: {e}")
             raise HTTPException(status_code=401, detail="Invalid authentication")
 
-    # Verify that the photo belongs to a meal
-    meal_by_filename = db.query(Meal).filter(Meal.photo_filename == filename).first()
-    if not meal_by_filename:
-        meals = db.query(Meal).all()
-        photo_found = False
-        for meal in meals:
-            if meal.photos and isinstance(meal.photos, list):
-                for photo in meal.photos:
-                    if isinstance(photo, dict) and photo.get("filename") == filename:
-                        photo_found = True
-                        break
-            if photo_found:
-                break
-        if not photo_found:
-            raise HTTPException(status_code=403, detail="Access denied: Photo not found")
-    
+    if not _meal_owns_photo(db, filename):
+        raise HTTPException(status_code=403, detail="Access denied: Photo not found")
+
+    # Prefer redirect to public storage (avoids proxying large images through the API)
+    public_url = get_browser_photo_url(filename)
+    if public_url:
+        return RedirectResponse(
+            url=public_url,
+            status_code=302,
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
     try:
-        # Get photo from Supabase Storage
         photo_data = get_photo_object(filename)
-        
-        # Determine content type from filename
+
         content_type = "image/jpeg"
-        if filename.lower().endswith('.png'):
+        lower = filename.lower()
+        if lower.endswith('.png'):
             content_type = "image/png"
-        elif filename.lower().endswith('.gif'):
+        elif lower.endswith('.gif'):
             content_type = "image/gif"
-        elif filename.lower().endswith('.webp'):
+        elif lower.endswith('.webp'):
             content_type = "image/webp"
-        
-        # Reset stream position
+
         photo_data.seek(0)
-        
+
         return StreamingResponse(
             photo_data,
             media_type=content_type,
             headers={
-                "Cache-Control": "public, max-age=3600"
+                "Cache-Control": "public, max-age=86400"
             }
         )
     except Exception as e:
         print(f"Error serving photo: {e}")
         raise HTTPException(status_code=404, detail="Photo not found")
-
-
-# Note: sw.js and manifest.json are served by StaticFiles mount
-# StaticFiles automatically sets correct MIME types
-# If special headers are needed for service worker, we can add a route here
-# For now, StaticFiles handles them correctly

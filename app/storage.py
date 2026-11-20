@@ -10,6 +10,7 @@ from app.config import (
     SUPABASE_BUCKET,
     DISABLE_AUTH,
     LOCAL_PHOTOS_PATH,
+    SUPABASE_PUBLIC_URL,
 )
 
 # Use service role key, fallback to anon key if service role not available
@@ -191,16 +192,28 @@ def delete_photo(filename: str):
 
 
 def get_photo_url(filename: str, expires_in_seconds: int = 3600) -> str:
-    """Get public URL for photo. When DISABLE_AUTH, returns app-relative path for router to serve."""
+    """Get storage URL for photo (may be internal). Prefer get_browser_photo_url for redirects."""
     if DISABLE_AUTH:
-        # Served by app at /static/photos/{filename}?token=...
         return f"/static/photos/{filename}"
     try:
-        base_url = SUPABASE_URL.rstrip('/')
+        base_url = (SUPABASE_URL or "").rstrip('/')
         return f"{base_url}/storage/v1/object/public/{SUPABASE_BUCKET}/{filename}"
     except Exception as e:
         print(f"Error generating photo URL: {e}")
         raise
+
+
+def get_browser_photo_url(filename: str):
+    """
+    Browser-reachable public photo URL, or None if we must proxy through the API
+    (e.g. Supabase only on an internal Docker network).
+    """
+    if DISABLE_AUTH:
+        return None
+    public_base = (SUPABASE_PUBLIC_URL or SUPABASE_URL or "").rstrip("/")
+    if not public_base.startswith("https://"):
+        return None
+    return f"{public_base}/storage/v1/object/public/{SUPABASE_BUCKET}/{filename}"
 
 
 def migrate_photos_from_filesystem(photos_dir: Path):

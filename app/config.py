@@ -56,6 +56,16 @@ DATABASE_URL = get_required_env(
 # When True, no login is required; all users share a single "local" user (for local Docker deployment).
 DISABLE_AUTH = (os.getenv("DISABLE_AUTH", "").lower() in ("1", "true", "yes"))
 
+# OCR (EasyOCR). Default on when installed; set ENABLE_OCR=0 to disable the feature at runtime.
+ENABLE_OCR = (os.getenv("ENABLE_OCR", "1").lower() in ("1", "true", "yes"))
+
+# Optional public base URL for Supabase Storage (browser-reachable).
+# When set (or when SUPABASE_URL is https), photo route can redirect instead of proxying bytes.
+SUPABASE_PUBLIC_URL = get_optional_env(
+    "SUPABASE_PUBLIC_URL",
+    description="Public Supabase URL for photo redirects (e.g. https://xxx.supabase.co)",
+)
+
 # Supabase configuration (optional when DISABLE_AUTH)
 SUPABASE_URL = None
 if not DISABLE_AUTH:
