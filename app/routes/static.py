@@ -4,7 +4,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import cast, String
 from typing import Optional
 
-from app.storage import get_photo_object, get_browser_photo_url
+from app.storage import (
+    get_photo_or_create_thumb,
+    get_browser_photo_url,
+    original_filename_for,
+    is_thumb_filename,
+)
 from app.database import get_db, Meal
 from app.auth import get_current_user, _get_token_from_request
 from app.config import DISABLE_AUTH
@@ -14,15 +19,17 @@ router = APIRouter(prefix="/static/photos", tags=["static"])
 
 def _meal_owns_photo(db: Session, filename: str, user_id: Optional[int] = None) -> bool:
     """Fast ownership check without loading every meal into Python."""
-    q = db.query(Meal.id).filter(Meal.photo_filename == filename)
+    # Thumbs are named uuid_t.jpg — ownership is on the original uuid.jpg
+    check_name = original_filename_for(filename)
+    q = db.query(Meal.id).filter(Meal.photo_filename == check_name)
     if user_id is not None and hasattr(Meal, "user_id"):
         q = q.filter(Meal.user_id == user_id)
     if q.first():
         return True
-    # photos JSON array: match filename substring (UUID filenames → safe enough)
+    # photos JSON array: match original filename substring (UUID filenames → safe enough)
     q2 = db.query(Meal.id).filter(
         Meal.photos.isnot(None),
-        cast(Meal.photos, String).like(f"%{filename}%"),
+        cast(Meal.photos, String).like(f"%{check_name}%"),
     )
     if user_id is not None and hasattr(Meal, "user_id"):
         q2 = q2.filter(Meal.user_id == user_id)
@@ -68,17 +75,18 @@ async def serve_photo(
     if not _meal_owns_photo(db, filename, user_id=current_user_id):
         raise HTTPException(status_code=403, detail="Access denied: Photo not found")
 
-    # Prefer redirect to public storage (avoids proxying large images through the API)
-    public_url = get_browser_photo_url(filename)
-    if public_url:
-        return RedirectResponse(
-            url=public_url,
-            status_code=302,
-            headers={"Cache-Control": "public, max-age=86400"},
-        )
+    # Prefer redirect to public storage for full-size only (thumbs may be created on demand)
+    if not is_thumb_filename(filename):
+        public_url = get_browser_photo_url(filename)
+        if public_url:
+            return RedirectResponse(
+                url=public_url,
+                status_code=302,
+                headers={"Cache-Control": "public, max-age=86400"},
+            )
 
     try:
-        photo_data = get_photo_object(filename)
+        photo_data = get_photo_or_create_thumb(filename)
 
         content_type = "image/jpeg"
         lower = filename.lower()

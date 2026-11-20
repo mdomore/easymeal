@@ -11,7 +11,7 @@ import requests
 
 from app.database import get_db, Meal
 from app.auth import get_current_user
-from app.storage import upload_photo, delete_photo, get_photo_url
+from app.storage import upload_photo, delete_photo, get_photo_url, ensure_thumbnail
 from app import schemas
 from app.error_handler import create_safe_http_exception
 from app.file_validation import validate_image_file, get_safe_image_extension
@@ -60,6 +60,45 @@ async def get_meals(
     ).order_by(Meal.created_at.desc()).all()
     
     return meals
+
+
+@router.post("/backfill-thumbnails")
+async def backfill_thumbnails(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create missing grid thumbnails for the current user's meal photos."""
+    meals = db.query(Meal).filter(Meal.user_id == current_user["id"]).all()
+    filenames = set()
+    for meal in meals:
+        if meal.photo_filename:
+            filenames.add(meal.photo_filename)
+        if meal.photos and isinstance(meal.photos, list):
+            for photo in meal.photos:
+                if isinstance(photo, dict) and photo.get("filename"):
+                    filenames.add(photo["filename"])
+
+    created = 0
+    skipped = 0
+    errors = []
+    for name in filenames:
+        try:
+            ensure_thumbnail(name)
+            created += 1
+        except FileNotFoundError:
+            skipped += 1
+            errors.append(f"missing:{name}")
+        except Exception as e:
+            skipped += 1
+            errors.append(f"{name}:{e}")
+            print(f"backfill-thumbnails error for {name}: {e}")
+
+    return {
+        "photos": len(filenames),
+        "created_or_verified": created,
+        "failed": skipped,
+        "errors": errors[:20],
+    }
 
 
 @router.get("/{meal_id}", response_model=schemas.MealResponse)

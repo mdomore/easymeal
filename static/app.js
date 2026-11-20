@@ -1046,6 +1046,7 @@ async function loadMeals() {
             allMeals = await response.json();
             await cacheMeals(allMeals);
             filterAndDisplayMeals();
+            backfillThumbnailsOnce();
         } else if (!isOnline) {
             // Offline - load from cache
             await loadMealsFromCache();
@@ -1230,8 +1231,9 @@ function displayMeals(meals) {
             photoFilename = primaryPhoto?.filename;
         }
         const hasPhoto = !!photoFilename;
-        // Include token in URL for image authentication (images can't send Authorization headers)
-        const photoUrl = hasPhoto ? `static/photos/${escapeHtml(photoFilename)}?token=${encodeURIComponent(currentToken || '')}` : '';
+        // Grid uses small thumbs (uuid_t.jpg); full-size kept for detail view
+        const thumbFilename = hasPhoto ? toThumbFilename(photoFilename) : '';
+        const photoUrl = hasPhoto ? `static/photos/${escapeHtml(thumbFilename)}?token=${encodeURIComponent(currentToken || '')}` : '';
         // Strip HTML tags for card preview
         const plainDescription = meal.description ? stripHtml(meal.description) : '';
         const description = plainDescription ? (plainDescription.substring(0, 100) + (plainDescription.length > 100 ? '...' : '')) : '';
@@ -1669,6 +1671,30 @@ function toggleSort() {
     const sortIcon = document.getElementById('sort-icon');
     sortIcon.textContent = sortOrder === 'asc' ? 'A-Z' : 'Z-A';
     filterAndDisplayMeals(); // Re-filter and display with new sort order
+}
+
+function toThumbFilename(filename) {
+    if (!filename) return '';
+    if (filename.endsWith('_t.jpg')) return filename;
+    const dot = filename.lastIndexOf('.');
+    const stem = dot >= 0 ? filename.slice(0, dot) : filename;
+    return `${stem}_t.jpg`;
+}
+
+let thumbBackfillStarted = false;
+async function backfillThumbnailsOnce() {
+    if (thumbBackfillStarted || !currentToken) return;
+    thumbBackfillStarted = true;
+    try {
+        const response = await fetch(`${API_BASE}/meals/backfill-thumbnails`, {
+            method: 'POST',
+            headers: buildAuthHeaders(true),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    } catch (e) {
+        console.warn('Thumbnail backfill skipped:', e);
+        thumbBackfillStarted = false;
+    }
 }
 
 function escapeHtml(text) {

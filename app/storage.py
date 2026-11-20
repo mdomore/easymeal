@@ -71,18 +71,37 @@ def ensure_bucket_exists():
         # Don't raise - bucket might already exist
 
 
+THUMB_MAX_SIZE = 400
+THUMB_QUALITY = 75
+
+
+def is_thumb_filename(filename: str) -> bool:
+    return bool(filename) and filename.endswith("_t.jpg")
+
+
+def thumb_filename_for(original: str) -> str:
+    """uuid.jpg → uuid_t.jpg"""
+    stem = Path(original).stem
+    if stem.endswith("_t"):
+        return f"{stem}.jpg"
+    return f"{stem}_t.jpg"
+
+
+def original_filename_for(filename: str) -> str:
+    """uuid_t.jpg → uuid.jpg (identity for non-thumbs)."""
+    if is_thumb_filename(filename):
+        return filename[:-6] + ".jpg"
+    return filename
+
+
 def optimize_image(image_data: bytes, max_width: int = 1920, max_height: int = 1920, quality: int = 85) -> bytes:
     """Optimize image by resizing and compressing"""
     try:
         from PIL import Image
-        from io import BytesIO
-        
-        # Open image
+
         img = Image.open(BytesIO(image_data))
-        
-        # Convert RGBA to RGB if necessary (for JPEG)
+
         if img.mode in ('RGBA', 'LA', 'P'):
-            # Create white background
             background = Image.new('RGB', img.size, (255, 255, 255))
             if img.mode == 'P':
                 img = img.convert('RGBA')
@@ -90,31 +109,92 @@ def optimize_image(image_data: bytes, max_width: int = 1920, max_height: int = 1
             img = background
         elif img.mode != 'RGB':
             img = img.convert('RGB')
-        
-        # Calculate new dimensions while maintaining aspect ratio
+
         original_width, original_height = img.size
         ratio = min(max_width / original_width, max_height / original_height, 1.0)
-        
+
         if ratio < 1.0:
             new_width = int(original_width * ratio)
             new_height = int(original_height * ratio)
             img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-        
-        # Compress and save as JPEG
+
         output = BytesIO()
         img.save(output, format='JPEG', quality=quality, optimize=True)
         output.seek(0)
-        
+
         return output.read()
     except Exception as e:
         print(f"Error optimizing image: {e}")
-        # Return original if optimization fails
         return image_data
 
 
+def make_thumbnail(image_data: bytes, max_size: int = THUMB_MAX_SIZE, quality: int = THUMB_QUALITY) -> bytes:
+    """Create a small JPEG thumbnail for grid cards."""
+    return optimize_image(image_data, max_width=max_size, max_height=max_size, quality=quality)
+
+
+def _store_bytes(filename: str, file_content: bytes, upsert: bool = False) -> None:
+    """Write bytes to local disk or Supabase Storage."""
+    if DISABLE_AUTH:
+        photos_dir = _get_local_photos_dir()
+        (photos_dir / filename).write_bytes(file_content)
+        return
+
+    ensure_bucket_exists()
+    headers = get_headers()
+    headers["Content-Type"] = "image/jpeg"
+    headers["x-upsert"] = "true" if upsert else "false"
+    response = requests.post(
+        f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{filename}",
+        headers=headers,
+        data=file_content,
+    )
+    if response.status_code not in [200, 201]:
+        raise Exception(f"Upload error: {response.status_code} - {response.text}")
+
+
+def _photo_exists(filename: str) -> bool:
+    if DISABLE_AUTH:
+        return (_get_local_photos_dir() / filename).is_file()
+    try:
+        response = requests.head(
+            f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{filename}",
+            headers=get_headers(),
+            timeout=10,
+        )
+        if response.status_code == 200:
+            return True
+        # Some Supabase setups disallow HEAD on public objects — try a ranged GET
+        response = requests.get(
+            f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{filename}",
+            headers={**get_headers(), "Range": "bytes=0-0"},
+            timeout=10,
+        )
+        return response.status_code in (200, 206)
+    except Exception:
+        return False
+
+
+def ensure_thumbnail(original_filename: str) -> str:
+    """
+    Ensure a thumbnail exists for an original photo. Returns thumb filename.
+    Creates it from the original when missing.
+    """
+    original = original_filename_for(original_filename)
+    thumb = thumb_filename_for(original)
+
+    if _photo_exists(thumb):
+        return thumb
+
+    original_data = get_photo_object(original).read()
+    thumb_bytes = make_thumbnail(original_data)
+    _store_bytes(thumb, thumb_bytes, upsert=True)
+    print(f"Created thumbnail {thumb} ({len(thumb_bytes) / 1024:.1f}KB) from {original}")
+    return thumb
+
+
 def upload_photo(file_content: bytes, file_extension: str = ".jpg") -> str:
-    """Upload photo to Supabase Storage or local disk and return filename (with optimization)."""
-    # Optimize image before uploading
+    """Upload photo (+ thumbnail) to storage and return original filename."""
     try:
         optimized_content = optimize_image(file_content)
         original_size = len(file_content)
@@ -122,35 +202,20 @@ def upload_photo(file_content: bytes, file_extension: str = ".jpg") -> str:
         reduction = ((original_size - optimized_size) / original_size * 100) if original_size > 0 else 0
         print(f"Image optimized: {original_size / 1024:.1f}KB -> {optimized_size / 1024:.1f}KB ({reduction:.1f}% reduction)")
         file_content = optimized_content
-        file_extension = ".jpg"  # Always save as JPEG after optimization
+        file_extension = ".jpg"
     except Exception as e:
         print(f"Warning: Image optimization failed, using original: {e}")
-    
+
     filename = f"{uuid.uuid4()}{file_extension}"
-    
-    if DISABLE_AUTH:
-        photos_dir = _get_local_photos_dir()
-        path = photos_dir / filename
-        path.write_bytes(file_content)
-        return filename
-    
-    ensure_bucket_exists()
+    _store_bytes(filename, file_content, upsert=False)
+
     try:
-        content_type = "image/jpeg"
-        headers = get_headers()
-        headers["Content-Type"] = content_type
-        headers["x-upsert"] = "false"
-        response = requests.post(
-            f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{filename}",
-            headers=headers,
-            data=file_content
-        )
-        if response.status_code not in [200, 201]:
-            raise Exception(f"Upload error: {response.status_code} - {response.text}")
-        return filename
+        thumb = thumb_filename_for(filename)
+        _store_bytes(thumb, make_thumbnail(file_content), upsert=True)
     except Exception as e:
-        print(f"Error uploading photo: {e}")
-        raise
+        print(f"Warning: thumbnail creation failed for {filename}: {e}")
+
+    return filename
 
 
 def get_photo_object(filename: str):
@@ -174,21 +239,38 @@ def get_photo_object(filename: str):
         raise
 
 
+def get_photo_or_create_thumb(filename: str) -> BytesIO:
+    """
+    Load a photo. If filename is a thumb and missing, create it from the original.
+    """
+    if is_thumb_filename(filename):
+        try:
+            return get_photo_object(filename)
+        except Exception:
+            ensure_thumbnail(original_filename_for(filename))
+            return get_photo_object(filename)
+    return get_photo_object(filename)
+
+
 def delete_photo(filename: str):
-    """Delete photo from Supabase Storage or local disk."""
-    if DISABLE_AUTH:
-        photos_dir = _get_local_photos_dir()
-        path = photos_dir / filename
-        if path.is_file():
-            path.unlink(missing_ok=True)
-        return
-    try:
-        requests.delete(
-            f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{filename}",
-            headers=get_headers()
-        )
-    except Exception as e:
-        print(f"Error deleting photo: {e}")
+    """Delete photo (+ its thumbnail) from storage."""
+    targets = [filename]
+    if not is_thumb_filename(filename):
+        targets.append(thumb_filename_for(filename))
+
+    for name in targets:
+        if DISABLE_AUTH:
+            path = _get_local_photos_dir() / name
+            if path.is_file():
+                path.unlink(missing_ok=True)
+            continue
+        try:
+            requests.delete(
+                f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{name}",
+                headers=get_headers()
+            )
+        except Exception as e:
+            print(f"Error deleting photo {name}: {e}")
 
 
 def get_photo_url(filename: str, expires_in_seconds: int = 3600) -> str:
