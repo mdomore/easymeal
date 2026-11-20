@@ -32,7 +32,8 @@ ENV ENABLE_OCR=${ENABLE_OCR}
 
 COPY ./app /app/app
 COPY ./static /app/static
-COPY run_local.py /app/run_local.py
+COPY ./alembic /app/alembic
+COPY ./alembic.ini /app/alembic.ini
 
 EXPOSE 8000
 
