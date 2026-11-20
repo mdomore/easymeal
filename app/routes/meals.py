@@ -6,9 +6,7 @@ from io import BytesIO
 import base64
 from pydantic import BaseModel
 from urllib.parse import quote
-import easyocr
 from PIL import Image
-import numpy as np
 import requests
 
 from app.database import get_db, Meal
@@ -17,6 +15,7 @@ from app.storage import upload_photo, delete_photo, get_photo_url
 from app import schemas
 from app.error_handler import create_safe_http_exception
 from app.file_validation import validate_image_file, get_safe_image_extension
+from app.config import ENABLE_OCR
 
 router = APIRouter(prefix="/api/meals", tags=["meals"])
 
@@ -24,7 +23,6 @@ router = APIRouter(prefix="/api/meals", tags=["meals"])
 # Maximum file size: 10MB
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB in bytes
 
-# Initialize EasyOCR reader (load models once at startup)
 ocr_reader = None
 
 
@@ -32,23 +30,31 @@ class GenerateImageRequest(BaseModel):
     title: str
 
 def get_ocr_reader():
-    """Get or initialize EasyOCR reader"""
+    """Get or initialize EasyOCR reader (lazy import to keep app startup light)."""
     global ocr_reader
+    if not ENABLE_OCR:
+        raise HTTPException(status_code=503, detail="OCR is disabled on this deployment")
     if ocr_reader is None:
+        try:
+            import easyocr
+        except ImportError as e:
+            raise HTTPException(
+                status_code=503,
+                detail="OCR dependencies are not installed (ENABLE_OCR / requirements-ocr)",
+            ) from e
         print("Initializing EasyOCR reader (this may take a moment on first use)...")
-        # Initialize with English and French support (can add more languages)
         ocr_reader = easyocr.Reader(['en', 'fr'], gpu=False)
         print("EasyOCR reader initialized")
     return ocr_reader
 
 
-@router.get("/", response_model=List[schemas.MealResponse])
-@router.get("", response_model=List[schemas.MealResponse])  # Also handle without trailing slash
+@router.get("/", response_model=List[schemas.MealListItem])
+@router.get("", response_model=List[schemas.MealListItem])  # Also handle without trailing slash
 async def get_meals(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get all meals for the current user"""
+    """Get all meals for the current user (list payload without heavy description HTML)."""
     meals = db.query(Meal).filter(
         Meal.user_id == current_user["id"]
     ).order_by(Meal.created_at.desc()).all()
@@ -266,11 +272,9 @@ async def extract_text_from_photo(
         )
     
     try:
-        # Get OCR reader
+        import numpy as np
+
         reader = get_ocr_reader()
-        
-        # Read image with EasyOCR
-        # EasyOCR works with numpy arrays, so we'll use PIL to convert
         image = Image.open(BytesIO(file_content))
         image_array = np.array(image)
         

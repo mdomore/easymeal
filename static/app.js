@@ -252,7 +252,7 @@ async function handleImportPhoto(e) {
         document.getElementById('meal-url').value = '';
         
         // Initialize Quill editor if not already done
-        initQuillEditor();
+        await initQuillEditor();
         
         // Populate description with extracted text
         if (data.extracted_text && data.extracted_text.trim()) {
@@ -292,12 +292,39 @@ function stripHtml(html) {
     return tmp.textContent || tmp.innerText || '';
 }
 
-// Initialize Quill editor
-function initQuillEditor() {
+let quillAssetsPromise = null;
+
+function loadQuillAssets() {
+    if (window.Quill) {
+        return Promise.resolve();
+    }
+    if (quillAssetsPromise) {
+        return quillAssetsPromise;
+    }
+    quillAssetsPromise = new Promise((resolve, reject) => {
+        const cssId = 'quill-snow-css';
+        if (!document.getElementById(cssId)) {
+            const link = document.createElement('link');
+            link.id = cssId;
+            link.rel = 'stylesheet';
+            link.href = '/easymeal/static/vendor/quill/quill.snow.css?v=15';
+            document.head.appendChild(link);
+        }
+        const script = document.createElement('script');
+        script.src = '/easymeal/static/vendor/quill/quill.js?v=15';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Failed to load Quill'));
+        document.head.appendChild(script);
+    });
+    return quillAssetsPromise;
+}
+
+// Initialize Quill editor (loads assets on first use)
+async function initQuillEditor() {
     if (quillEditor) {
         return; // Already initialized
     }
-    
+    await loadQuillAssets();
     quillEditor = new Quill('#quill-editor', {
         theme: 'snow',
         modules: {
@@ -1211,7 +1238,7 @@ function displayMeals(meals) {
         
         return `
         <div class="meal-card" onclick="showMealDetails(${meal.id})">
-            ${hasPhoto ? `<div class="meal-card-image"><img src="${photoUrl}" alt="${escapeHtml(meal.name)}"></div>` : '<div class="meal-card-image-placeholder"><span class="placeholder-icon">🍽️</span></div>'}
+            ${hasPhoto ? `<div class="meal-card-image"><img src="${photoUrl}" alt="${escapeHtml(meal.name)}" loading="lazy" decoding="async"></div>` : '<div class="meal-card-image-placeholder"><span class="placeholder-icon">🍽️</span></div>'}
             <div class="meal-menu-overlay" onclick="event.stopPropagation()">
                 <button class="meal-menu-btn" onclick="toggleMealMenu(${meal.id})">⋯</button>
                 <div id="menu-${meal.id}" class="meal-menu-dropdown hidden" onclick="event.stopPropagation()">
@@ -1229,7 +1256,7 @@ function displayMeals(meals) {
     }).join('');
 }
 
-function showAddMealForm() {
+async function showAddMealForm() {
     editingMealId = null;
     originalMealPhoto = null;
     photoRemoved = false;
@@ -1259,7 +1286,7 @@ function showAddMealForm() {
     }
     
     // Initialize Quill editor if not already done
-    initQuillEditor();
+    await initQuillEditor();
     quillEditor.setContents([]); // Clear editor content
     
     document.getElementById('meal-modal').classList.remove('hidden');
@@ -1333,18 +1360,15 @@ function editMeal(mealId) {
         }
         
         // Initialize Quill editor if not already done
-        initQuillEditor();
-        
-        // Load description into Quill editor using Quill's clipboard API
-        if (meal.description) {
-            // Convert stored HTML into a Quill Delta to preserve formatting
-            const delta = quillEditor.clipboard.convert(meal.description);
-            quillEditor.setContents(delta);
-        } else {
-            quillEditor.setContents([]);
-        }
-        
-        document.getElementById('meal-modal').classList.remove('hidden');
+        return initQuillEditor().then(() => {
+            if (meal.description) {
+                const delta = quillEditor.clipboard.convert(meal.description);
+                quillEditor.setContents(delta);
+            } else {
+                quillEditor.setContents([]);
+            }
+            document.getElementById('meal-modal').classList.remove('hidden');
+        });
     })
     .catch(error => {
         console.error('Failed to load meal:', error);
@@ -1465,7 +1489,7 @@ async function saveMeal(event) {
     
     const name = document.getElementById('meal-name').value;
     // Get HTML content from Quill editor
-    initQuillEditor(); // Ensure editor is initialized
+    await initQuillEditor();
     const description = quillEditor.root.innerHTML.trim() || null;
     const mealUrl = document.getElementById('meal-url').value.trim();
     

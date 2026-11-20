@@ -148,3 +148,18 @@ class MealResponse(MealBase):
 
     class Config:
         from_attributes = True
+
+
+class MealListItem(BaseModel):
+    """Lightweight meal for grid/list (no description HTML)."""
+    id: Optional[int] = None
+    name: str
+    url: Optional[str] = None
+    photo_filename: Optional[str] = None
+    photos: Optional[list] = None
+    tags: Optional[List[str]] = None
+    created_at: Optional[datetime] = None
+    user_id: Optional[int] = None
+
+    class Config:
+        from_attributes = True

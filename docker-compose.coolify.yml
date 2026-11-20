@@ -4,7 +4,10 @@
 # - Connects to the existing Supabase stack via the external network
 services:
   api:
-    build: .
+    build:
+      context: .
+      args:
+        ENABLE_OCR: "1"
     restart: unless-stopped
     logging:
       driver: json-file
@@ -14,12 +17,14 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:${SUPABASE_POSTGRES_PASSWORD}@supabase-db:5432/easymeal
       SUPABASE_URL: http://supabase-kong:8000
+      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL:-https://micmoe.ddns.net}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET}
       SUPABASE_BUCKET: ${SUPABASE_BUCKET:-photos}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://micmoe.ddns.net}
       ENVIRONMENT: production
+      ENABLE_OCR: "1"
     expose:
       - "8000"
     # Force Traefik to route via the 'coolify' network (proxy is always attached to it).

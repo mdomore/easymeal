@@ -53,6 +53,25 @@ DATABASE_URL = get_required_env(
     "Database connection URL (e.g., postgresql://user:pass@host:port/dbname)"
 )
 
+# Auth: production keeps login; set DISABLE_AUTH=true only for local no-login mode
+DISABLE_AUTH = (os.getenv("DISABLE_AUTH", "").lower() in ("1", "true", "yes"))
+
+# OCR (EasyOCR). Default on; set ENABLE_OCR=0 to disable at runtime.
+ENABLE_OCR = (os.getenv("ENABLE_OCR", "1").lower() in ("1", "true", "yes"))
+
+# Optional browser-reachable Supabase URL for photo redirects (otherwise API proxies)
+SUPABASE_PUBLIC_URL = get_optional_env(
+    "SUPABASE_PUBLIC_URL",
+    description="Public Supabase URL for photo redirects",
+)
+
+# Local photos path when DISABLE_AUTH / local storage
+LOCAL_PHOTOS_PATH = get_optional_env(
+    "LOCAL_PHOTOS_PATH",
+    default="data/photos",
+    description="Local photos directory when not using Supabase",
+)
+
 # Supabase configuration
 SUPABASE_URL = get_required_env(
     "SUPABASE_URL",
