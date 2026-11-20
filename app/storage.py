@@ -205,12 +205,15 @@ def get_photo_url(filename: str, expires_in_seconds: int = 3600) -> str:
 
 def get_browser_photo_url(filename: str):
     """
-    Browser-reachable public photo URL, or None if we must proxy through the API
-    (e.g. Supabase only on an internal Docker network).
+    Browser-reachable public photo URL, or None if we must proxy through the API.
+
+    Only redirects when SUPABASE_PUBLIC_URL is explicitly set to a real public
+    Supabase/storage origin. Never fall back to SUPABASE_URL (often internal)
+    or the app domain (storage is not routed there → Traefik 503).
     """
     if DISABLE_AUTH:
         return None
-    public_base = (SUPABASE_PUBLIC_URL or SUPABASE_URL or "").rstrip("/")
+    public_base = (SUPABASE_PUBLIC_URL or "").rstrip("/")
     if not public_base.startswith("https://"):
         return None
     return f"{public_base}/storage/v1/object/public/{SUPABASE_BUCKET}/{filename}"

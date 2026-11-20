@@ -14,7 +14,9 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:${SUPABASE_POSTGRES_PASSWORD}@supabase-db:5432/easymeal
       SUPABASE_URL: http://supabase-kong:8000
-      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL:-https://micmoe.ddns.net}
+      # Only set SUPABASE_PUBLIC_URL in Coolify if Supabase Storage is publicly reachable.
+      # A wrong value (e.g. the app domain) causes photo 302 → Traefik 503.
+      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL:-}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET}
